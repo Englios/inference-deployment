@@ -5,3 +5,5 @@ docs/
 .venv/
 __pycache__/
 *.lock
+**/secrets*
+!**/secrets.example.yaml
