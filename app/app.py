@@ -14,9 +14,21 @@ DEFAULT_UPSTREAM_BASE_URL = os.getenv(
 ).rstrip("/")
 UPSTREAM_BASE_URL = os.getenv("UPSTREAM_BASE_URL", DEFAULT_UPSTREAM_BASE_URL).rstrip("/")
 INTERNAL_LLM_API_KEY = os.getenv("INTERNAL_LLM_API_KEY", "")
-MIDDLEWARE_API_KEY = os.getenv("MIDDLEWARE_API_KEY", "")
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "").strip()
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "120"))
+
+
+def _parse_api_keys(raw: str) -> set[str]:
+    tokens = [part.strip() for part in raw.replace("\n", ",").split(",")]
+    return {token for token in tokens if token}
+
+
+def _allowed_client_keys() -> set[str]:
+    keys = _parse_api_keys(os.getenv("MIDDLEWARE_API_KEYS", ""))
+    legacy_key = os.getenv("MIDDLEWARE_API_KEY", "").strip()
+    if legacy_key:
+        keys.add(legacy_key)
+    return keys
 
 
 def _extract_bearer(request: Request) -> str:
@@ -27,10 +39,11 @@ def _extract_bearer(request: Request) -> str:
 
 
 def _enforce_client_auth(request: Request) -> None:
-    if not MIDDLEWARE_API_KEY:
+    allowed_keys = _allowed_client_keys()
+    if not allowed_keys:
         return
     token = _extract_bearer(request)
-    if token != MIDDLEWARE_API_KEY:
+    if token not in allowed_keys:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
