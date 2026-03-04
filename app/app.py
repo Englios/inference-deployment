@@ -8,10 +8,11 @@ from fastapi.responses import JSONResponse, Response
 
 app = FastAPI(title="OpenAI-Compatible LLM Gateway", version="0.1.0")
 
-UPSTREAM_BASE_URL = os.getenv(
-    "UPSTREAM_BASE_URL",
-    "http://llm-service.inference-engine.svc.cluster.local",
+DEFAULT_UPSTREAM_BASE_URL = os.getenv(
+    "DEFAULT_UPSTREAM_BASE_URL",
+    "http://127.0.0.1:8000",
 ).rstrip("/")
+UPSTREAM_BASE_URL = os.getenv("UPSTREAM_BASE_URL", DEFAULT_UPSTREAM_BASE_URL).rstrip("/")
 INTERNAL_LLM_API_KEY = os.getenv("INTERNAL_LLM_API_KEY", "")
 MIDDLEWARE_API_KEY = os.getenv("MIDDLEWARE_API_KEY", "")
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "").strip()

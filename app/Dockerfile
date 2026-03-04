@@ -2,6 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
+ARG DEFAULT_UPSTREAM_BASE_URL=http://127.0.0.1:8000
+ENV DEFAULT_UPSTREAM_BASE_URL=${DEFAULT_UPSTREAM_BASE_URL}
+
 RUN pip install --no-cache-dir uv
 RUN uv pip install --system \
 	fastapi==0.116.1 \
