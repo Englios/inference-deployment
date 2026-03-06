@@ -1,21 +1,4 @@
 services:
-  # --- vLLM (disabled: GGUF arch qwen35 not supported yet) ---
-  # vllm:
-  #   image: vllm/vllm-openai:latest
-  #   command: ["--model", "/models/qwen/Qwen3.5-27B-Q3_K_M.gguf"]
-  #   ports:
-  #     - "10000:8000"
-  #   volumes:
-  #     - ./.hf_cache:/root/.cache/huggingface:rw
-  #     - ./.hf_cache/unsloth/Qwen3.5-27B-GGUF:/models/qwen:ro
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN}
-  #     - HF_HOME=/root/.cache/huggingface
-  #   restart: unless-stopped
-  #   gpus: all
-
   llamacpp:
     image: ghcr.io/ggml-org/llama.cpp:server-cuda
     command: [
@@ -33,6 +16,22 @@ services:
       - .env
     restart: unless-stopped
     gpus: all
+
+  # vllm:
+  #   image: vllm/vllm-openai:latest
+  #   command: ["--model", "/models/qwen/Qwen3.5-27B-Q3_K_M.gguf"]
+  #   ports:
+  #     - "10001:8000"
+  #   volumes:
+  #     - ./.hf_cache:/root/.cache/huggingface:rw
+  #     - ./.hf_cache/unsloth/Qwen3.5-27B-GGUF:/models/qwen:ro
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - HUGGINGFACE_HUB_TOKEN=${HF_TOKEN}
+  #     - HF_HOME=/root/.cache/huggingface
+  #   restart: unless-stopped
+  #   gpus: all
 
   gpu-check:
     image: nvidia/cuda:12.8.1-base-ubuntu24.04
