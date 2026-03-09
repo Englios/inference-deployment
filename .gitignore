@@ -19,3 +19,5 @@ override.tf.json
 .terraform.lock.hcl
 tfplan
 *.tfplan
+
+docs/ignore*
