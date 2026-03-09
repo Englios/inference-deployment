@@ -91,7 +91,7 @@ variable "accelerator_type" {
 variable "gpu_node_instance_types" {
   description = "GPU instance types for NVIDIA-backed nodes."
   type        = list(string)
-  default     = ["g5.xlarge"]
+  default     = ["g7e.12xlarge"]
 }
 
 variable "system_node_instance_types" {
@@ -121,13 +121,13 @@ variable "system_node_group_size" {
 variable "node_disk_size" {
   description = "Node root volume size in GiB."
   type        = number
-  default     = 200
+  default     = 500
 }
 
 variable "system_node_disk_size" {
   description = "System node root volume size in GiB."
   type        = number
-  default     = 50
+  default     = 100
 }
 
 variable "node_group_labels" {

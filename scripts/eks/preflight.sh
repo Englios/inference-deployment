@@ -7,9 +7,14 @@ require_cmd aws
 TFVARS_FILE="${TFVARS_FILE:-${ROOT_DIR}/terraform/stacks/eks-inference/terraform.tfvars}"
 AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-}}"
 AWS_PROFILE="${AWS_PROFILE:-}"
+TARGET_GPU_INSTANCE_TYPE="${TARGET_GPU_INSTANCE_TYPE:-}"
 
 if [[ -z "${AWS_REGION}" && -f "${TFVARS_FILE}" ]]; then
   AWS_REGION="$(grep -E '^aws_region\s*=' "${TFVARS_FILE}" | head -n 1 | cut -d '"' -f2 || true)"
+fi
+
+if [[ -z "${TARGET_GPU_INSTANCE_TYPE}" && -f "${TFVARS_FILE}" ]]; then
+  TARGET_GPU_INSTANCE_TYPE="$(grep -E '^gpu_node_instance_types\s*=' "${TFVARS_FILE}" | grep -oE '"[^"]+"' | head -n 1 | tr -d '"' || true)"
 fi
 
 if [[ -z "${AWS_REGION}" ]]; then
@@ -52,10 +57,10 @@ echo "Checking EKS availability in ${AWS_REGION}..."
 echo "EKS API reachable in ${AWS_REGION}."
 echo
 
-candidate_instance_types=("g5.xlarge" "g6.xlarge")
-
-if [[ "${AWS_REGION}" == "ap-southeast-5" ]]; then
-  candidate_instance_types=("g6.xlarge" "g5.xlarge")
+if [[ -n "${TARGET_GPU_INSTANCE_TYPE}" ]]; then
+  candidate_instance_types=("${TARGET_GPU_INSTANCE_TYPE}")
+else
+  candidate_instance_types=("g7e.12xlarge" "g7e.24xlarge" "g6e.12xlarge" "g6e.24xlarge")
 fi
 
 echo "Checking candidate GPU instance offerings..."
@@ -75,7 +80,7 @@ done
 echo
 
 if [[ ${#available_types[@]} -eq 0 ]]; then
-  echo "No tested GPU instance types (g5.xlarge or g6.xlarge) are offered in ${AWS_REGION}." >&2
+  echo "No requested or fallback GPU instance types are offered in ${AWS_REGION}." >&2
   exit 1
 fi
 
@@ -83,8 +88,8 @@ recommended_type="${available_types[0]}"
 
 echo "Recommended accelerator node type for this region: ${recommended_type}"
 
-if [[ "${AWS_REGION}" == "ap-southeast-5" && "${recommended_type}" == "g6.xlarge" ]]; then
-  echo "Malaysia region detected: preferring g6.xlarge because AWS has announced G6 availability there and G5 may be harder to source."
+if [[ "${AWS_REGION}" == "ap-southeast-5" && "${recommended_type}" == "g6e.12xlarge" ]]; then
+  echo "Malaysia region detected: using G6e fallback because G7e is not broadly available there."
 fi
 
 echo

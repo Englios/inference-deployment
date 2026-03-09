@@ -7,6 +7,7 @@ require_cmd curl
 
 NAMESPACE="${NAMESPACE:-inference-engine}"
 LOCAL_PORT="${LOCAL_PORT:-18080}"
+RAY_SERVICE_NAME="${RAY_SERVICE_NAME:-ray-vllm}"
 
 kubectl -n "${NAMESPACE}" wait --for=condition=Ready pod -l ray.io/node-type=head --timeout=900s
 kubectl -n "${NAMESPACE}" wait --for=condition=Ready pod -l ray.io/group=gpu-workers --timeout=900s
@@ -29,4 +30,5 @@ for _ in $(seq 1 60); do curl -fsS "http://127.0.0.1:${LOCAL_PORT}/health" >/dev
 
 curl -fsS "http://127.0.0.1:${LOCAL_PORT}/health"; echo
 curl -fsS "http://127.0.0.1:${LOCAL_PORT}/v1/models"; echo
+kubectl -n "${NAMESPACE}" get rayservice "${RAY_SERVICE_NAME}"
 kubectl -n "${NAMESPACE}" get pod -l ray.io/group=gpu-workers -o wide

@@ -18,4 +18,4 @@ kubectl -n "${NAMESPACE}" create secret generic vllm-secrets \
   --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl apply -k "${OVERLAY_DIR}"
-kubectl -n "${NAMESPACE}" rollout status deploy/vllm-server --timeout=900s
+kubectl -n "${NAMESPACE}" rollout status statefulset/vllm-server --timeout=1800s

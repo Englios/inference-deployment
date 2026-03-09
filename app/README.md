@@ -53,7 +53,7 @@ curl http://127.0.0.1:8080/v1/models \
 curl http://127.0.0.1:8080/v1/chat/completions \
   -H "Authorization: Bearer bob-key" \
   -H "Content-Type: application/json" \
-  -d '{"model":"Qwen/Qwen2.5-3B-Instruct","messages":[{"role":"user","content":"hello"}]}'
+  -d '{"model":"Qwen/Qwen3.5-27B","messages":[{"role":"user","content":"hello"}]}'
 ```
 
 ## Kubernetes notes
