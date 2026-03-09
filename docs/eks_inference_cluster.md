@@ -21,6 +21,34 @@ scripts/eks/up-vllm.sh
 
 These scripts are convenience wrappers around standard Terraform and Kubernetes commands.
 
+## Scale down or remove later
+
+You have three practical options after testing:
+
+### Stop only the workloads
+
+```bash
+kubectl -n inference-engine delete deploy vllm-server
+kubectl -n inference-engine delete rayservice ray-vllm
+```
+
+### Shrink the cluster
+
+Edit `terraform/stacks/eks-inference/terraform.tfvars` and reduce the node counts, then apply again:
+
+```bash
+scripts/eks/plan.sh
+scripts/eks/apply.sh
+```
+
+### Remove everything
+
+```bash
+scripts/eks/destroy.sh
+```
+
+That is the full Terraform teardown path for the EKS stack.
+
 ## Recommended model choice
 
 For this cluster shape, the best default is usually the **7B–8B class** rather than the very small 3B class.
