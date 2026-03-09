@@ -100,6 +100,27 @@ scripts/eks/preflight.sh
 scripts/eks/up-ray-vllm.sh
 ```
 
+## Where to put secrets
+
+For the EKS scripts in this repo, the intended pattern is:
+
+- keep secrets **in your local shell environment**
+- let the deploy scripts create/update Kubernetes Secrets from those env vars
+
+The main values are:
+
+```bash
+export HF_TOKEN="hf_xxx"
+export VLLM_API_KEY="supersecretkey"
+```
+
+Then:
+
+- `scripts/eks/deploy-vllm.sh` creates `vllm-secrets`
+- `scripts/eks/deploy-ray-vllm.sh` creates `ray-vllm-secrets`
+
+Do **not** commit real secrets into the repo. The `.gitignore` already ignores common `secrets*` files.
+
 ## Overlays in this repo
 
 - **Option 3 primary path:** `.kube/eks/ray/ray-vllm-service.yaml` using **122B-A10B** with **TP=2 + PP=2** across 2 nodes
