@@ -17,42 +17,22 @@ locals {
   public_subnet_cidrs  = length(var.public_subnet_cidrs) > 0 ? var.public_subnet_cidrs : [for idx in range(var.az_count) : cidrsubnet(var.vpc_cidr, 8, idx)]
   private_subnet_cidrs = length(var.private_subnet_cidrs) > 0 ? var.private_subnet_cidrs : [for idx in range(var.az_count) : cidrsubnet(var.vpc_cidr, 8, idx + 100)]
 
-  accelerator_profiles = {
-    nvidia = {
-      ami_type       = "AL2023_x86_64_NVIDIA"
-      instance_types = var.gpu_node_instance_types
-      labels = {
-        workload                         = "inference"
-        accelerator                      = "nvidia-gpu"
-        "node.kubernetes.io/accelerator" = "nvidia"
-      }
-      taints = {
-        inference = {
-          key    = "dedicated"
-          value  = "inference"
-          effect = "NO_SCHEDULE"
-        }
-      }
+  accelerator_profile = {
+    ami_type       = "AL2023_x86_64_NVIDIA"
+    instance_types = var.gpu_node_instance_types
+    labels = {
+      workload                         = "inference"
+      accelerator                      = "nvidia-gpu"
+      "node.kubernetes.io/accelerator" = "nvidia"
     }
-    neuron = {
-      ami_type       = "AL2023_x86_64_NEURON"
-      instance_types = var.neuron_node_instance_types
-      labels = {
-        workload                         = "inference"
-        accelerator                      = "aws-neuron"
-        "node.kubernetes.io/accelerator" = "neuron"
-      }
-      taints = {
-        inference = {
-          key    = "dedicated"
-          value  = "inference"
-          effect = "NO_SCHEDULE"
-        }
+    taints = {
+      inference = {
+        key    = "dedicated"
+        value  = "inference"
+        effect = "NO_SCHEDULE"
       }
     }
   }
-
-  accelerator_profile = local.accelerator_profiles[var.accelerator_type]
 
   addons = merge(
     {
@@ -74,7 +54,7 @@ locals {
     var.enable_ebs_csi ? {
       aws-ebs-csi-driver = {
         most_recent              = true
-        service_account_role_arn = module.ebs_csi_driver_irsa[0].iam_role_arn
+        service_account_role_arn = module.ebs_csi_driver_irsa[0].arn
       }
     } : {},
   )

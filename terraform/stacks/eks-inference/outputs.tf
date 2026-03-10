@@ -32,8 +32,3 @@ output "public_subnet_ids" {
   description = "Public subnets created for the cluster."
   value       = module.eks_inference.public_subnet_ids
 }
-
-output "accelerator_type" {
-  description = "Accelerator type backing the node group."
-  value       = module.eks_inference.accelerator_type
-}

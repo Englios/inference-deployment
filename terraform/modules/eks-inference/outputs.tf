@@ -42,8 +42,3 @@ output "public_subnet_ids" {
   description = "Public subnet IDs created for load balancers and NAT."
   value       = module.vpc.public_subnets
 }
-
-output "accelerator_type" {
-  description = "The accelerator profile used by the worker node group."
-  value       = var.accelerator_type
-}

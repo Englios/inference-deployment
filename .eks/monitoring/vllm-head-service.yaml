@@ -1,12 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: llm-service
+  name: ray-vllm-head
   namespace: inference-engine
+  labels:
+    app: ray-vllm-head
 spec:
-  type: ClusterIP
   selector:
-    app: vllm-server
+    ray.io/node-type: head
   ports:
-  - port: 80
+  - name: serve
+    port: 8000
     targetPort: 8000

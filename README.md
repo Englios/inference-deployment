@@ -21,7 +21,8 @@ See the [alif-homelab](https://github.com/Englios/alif-homelab) repo for the bas
 
 ## Repo Layout
 
-- `.kube/` — Kubernetes manifests (base + engine/middleware deployments)
+- `.kube/` — local Kubernetes manifests for dev workflows (base + engine/middleware deployments)
+- `.eks/` — EKS deployment assets (`ray/manifests/`, `ray/templates/`, `monitoring/`); keep this to current supported deployment paths, not per-experiment variants
 - `app/` — OpenAI-compatible middleware gateway app source
 - `scripts/` — utility scripts (model download, smoke tests, etc.)
 - `docs/` — playbooks and reference notes
@@ -74,5 +75,3 @@ HF_TOKEN=$HF_TOKEN python scripts/download_qwen.py
 Notes:
 - The script uses `allow_patterns=["Qwen3.5-27B-Q3_K_M.gguf"]` to fetch the Q3_K_M quantized artifact.
 - Ensure you have enough disk space in `./hf_cache` and that `HF_TOKEN` is set if the model requires authentication.
-
-

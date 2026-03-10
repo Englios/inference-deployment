@@ -21,9 +21,11 @@ scripts/eks/up-ray-vllm.sh
 
 These scripts are convenience wrappers around standard Terraform and Kubernetes commands.
 
+The Ray EKS flow now also installs a lightweight monitoring stack (`kube-prometheus-stack` + `dcgm-exporter`) so future runs retain Prometheus and GPU metrics. Monitoring is split into separate scrape targets for Ray head metrics and the vLLM serving endpoint.
+
 ## Current target topology
 
-The repo is now tuned for **Option 3 first**:
+The repo is tuned for the active Ray multi-node path:
 
 - 2 inference nodes
 - each node shaped like `g7e.12xlarge`
@@ -31,8 +33,6 @@ The repo is now tuned for **Option 3 first**:
 - Ray-backed execution with **tensor_parallel_size=2** and **pipeline_parallel_size=2**
 - model: `Qwen/Qwen3.5-122B-A10B`
 - inter-node network class on G7e: **400 Gbps with EFA support**
-
-If you later want **Option 2**, switch the Terraform node shape to `g7e.24xlarge`, set the node count to `1`, and keep the model sharded across the 4 GPUs on that single node.
 
 ## Why Ray is the default now
 
@@ -45,11 +45,7 @@ Your current target is no longer just “multi-node exists”; it is:
 
 That makes the Ray/KubeRay path the more natural default for the main experiment in this repo.
 
-The plain non-Ray path is still kept around as a simpler fallback / sanity path, but the intended Option 3 experiment is now the Ray path.
-
-If TP+PP proves unstable for the MoE model, the repo also includes a fallback Ray manifest that uses **TP=4 / PP=1** instead:
-
-- `.kube/eks/ray/ray-vllm-122b-a10b.yaml`
+The active experiment path in this repo is the Ray path.
 
 ## Scale down or remove later
 
@@ -58,7 +54,7 @@ You have three practical options after testing:
 ### Stop only the workloads
 
 ```bash
-kubectl -n inference-engine delete statefulset vllm-server
+kubectl -n inference-engine delete deployment vllm-server
 kubectl -n inference-engine delete rayservice ray-vllm
 ```
 
@@ -100,21 +96,6 @@ The lighter dense comparison model kept in the repo is:
 If your main question is **"how will the infra hold up?"** rather than **"which model is better?"**, this is a reasonable primary stress profile.
 
 The primary path keeps your original topology-first intent by using **TP=2 + PP=2**.
-The fallback path uses **TP=4 + PP=1** if you want the simpler MoE-friendly layout later.
-
-Why `TP=4 / PP=1` is called “MoE-friendly” here:
-
-- it keeps all 4 GPUs in one tensor-parallel group
-- it avoids adding pipeline-stage orchestration on top of MoE routing behavior
-- it is a cleaner fallback if the first failures are coming from PP coordination rather than raw model fit
-
-Important clarification:
-
-- **TP=4 / PP=1 does not require 5 GPUs**
-- it still uses the same **4 GPUs total**
-- it just uses them as one 4-way TP group instead of two 2-GPU TP stages connected by PP
-
-So if you want to respect the physical shape of **2 GPUs per node × 2 nodes**, the repo's primary path remains **TP=2 / PP=2**.
 
 ## Performance checks to run later
 
@@ -145,6 +126,10 @@ Important metric nuance:
 - **system-level throughput** is directly measurable from benchmark traffic
 - **per-node throughput** is an approximation unless you benchmark nodes independently
 - **per-GPU token contribution** is only an estimate in TP/PP serving, not a precise ground-truth metric reported by vLLM
+
+## Experiment results
+
+The March 2026 experiment established that the EKS + Ray + vLLM infrastructure path worked, `Qwen/Qwen3.5-122B-A10B` failed in the packaged runtime path, and `openai/gpt-oss-120b` served successfully on the same 2-node / 4-GPU topology.
 
 ## Context length vs sequence count
 

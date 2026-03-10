@@ -4,7 +4,7 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
 
 require_cmd kubectl
 
-MANIFEST_DIR="${ROOT_DIR}/.kube/eks/ray"
+MANIFEST_DIR="${EKS_DIR}/ray"
 NAMESPACE="${NAMESPACE:-inference-engine}"
 RAY_MANIFEST="${RAY_MANIFEST:-${MANIFEST_DIR}/ray-vllm-service.yaml}"
 

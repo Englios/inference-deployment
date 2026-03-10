@@ -6,8 +6,8 @@ require_cmd python3
 require_env VLLM_API_KEY
 
 NAMESPACE="${NAMESPACE:-inference-engine}"
-MANIFEST_PATH="${ROOT_DIR}/.kube/eks/ray/ray-vllm-service.yaml"
-BACKUP_PATH="${ROOT_DIR}/.kube/eks/ray/ray-vllm-service.yaml.bak"
+MANIFEST_PATH="${EKS_DIR}/ray/ray-vllm-service.yaml"
+BACKUP_PATH="${EKS_DIR}/ray/ray-vllm-service.yaml.bak"
 CONTEXT_WINDOWS="${CONTEXT_WINDOWS:-32768 65536 131072}"
 PROMPT="${PROMPT:-Explain the tradeoff between long context windows and TTFT in vLLM.}"
 MAX_TOKENS="${MAX_TOKENS:-256}"

@@ -21,3 +21,4 @@ tfplan
 *.tfplan
 
 docs/ignore*
+experiments/

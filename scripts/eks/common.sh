@@ -5,6 +5,8 @@ set -euo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 STACK_DIR="${ROOT_DIR}/terraform/stacks/eks-inference"
 TF_BIN="${ROOT_DIR}/scripts/eks/terraform.sh"
+EKS_DIR="${ROOT_DIR}/.eks"
+KUBE_DIR="${ROOT_DIR}/.kube"
 
 require_cmd() {
   local cmd="$1"

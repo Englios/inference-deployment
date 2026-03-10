@@ -2,12 +2,15 @@
 
 This stack provisions an Amazon EKS cluster for inference testing with a small untained system node group and a fixed GPU inference node group.
 
+Repository convention: keep `.eks/` for the current supported deployment manifests only. Experiment-by-experiment parameter changes should live in local `experiments/` notes unless a variant becomes a stable path worth promoting into `.eks/`.
+
+The supported EKS path now includes a lightweight monitoring stack under `.eks/monitoring/` so Prometheus, Grafana, GPU metrics, Ray head metrics, and vLLM serving metrics are available during Ray/vLLM runs.
+
 ## Quick review first
 
 1. `docs/eks_terraform_quick_review.md`
 2. `terraform/modules/eks-inference/main.tf`
-3. `.kube/eks/ray/ray-vllm-service.yaml`
-4. `.kube/eks/vllm-option2/deployment.yaml`
+3. `.eks/ray/ray-vllm-service.yaml`
 
 ## Default topology in this repo now
 
@@ -23,15 +26,6 @@ That means the intended Option 3 experiment is now the **single sharded 4-GPU mo
 - **TP=2** inside each 2-GPU node
 - **PP=2** across the two nodes
 - a heavier **122B-A10B MoE stress profile**
-
-When you want to try **Option 2 later**, switch Terraform to:
-
-```hcl
-gpu_node_instance_types = ["g7e.24xlarge"]
-node_group_size         = 1
-```
-
-and then re-tune the workload so the 4-GPU shard lives on one node instead of across two nodes. In that later case, you would switch to the checked-in **Option 2 overlay** under `.kube/eks/vllm-option2/`, which also uses **TP=4 / PP=1** but on one node.
 
 ## Important model note
 
@@ -60,12 +54,9 @@ Because your actual intended experiment is now explicit:
 
 That does make **Ray/KubeRay** the more appropriate primary path in this repo.
 
-So the repo now treats the paths like this:
+So the repo now treats the active path as:
 
-- **Primary Option 3 path:** Ray/KubeRay across 2 nodes for one sharded `Qwen/Qwen3.5-122B-A10B` model using **TP=2 + PP=2**
-- **Option 2 later path:** single-node 4-GPU overlay under `.kube/eks/vllm-option2/` with **TP=4 + PP=1**
-- **MoE-friendly fallback path:** `.kube/eks/ray/ray-vllm-122b-a10b.yaml` using **TP=4 + PP=1**
-- **Plain non-Ray path:** kept only as a simpler sanity / fallback path
+- **Primary path:** Ray/KubeRay across 2 nodes for one sharded `Qwen/Qwen3.5-122B-A10B` model using **TP=2 + PP=2**
 
 ## The only commands that matter at a glance
 
@@ -75,6 +66,8 @@ So the repo now treats the paths like this:
 - `scripts/eks/benchmark-ray-vllm.sh`
 - `scripts/eks/collect-gpu-metrics.sh`
 - `scripts/eks/destroy.sh`
+- `scripts/eks/install-monitoring.sh`
+- `scripts/eks/validate-monitoring.sh`
 
 ## AWS prerequisites
 
@@ -94,7 +87,6 @@ $EDITOR terraform/stacks/eks-inference/terraform.tfvars
 export AWS_PROFILE=your-profile
 export AWS_REGION=us-west-2
 export HF_TOKEN="hf_xxx"
-export VLLM_API_KEY="supersecretkey"
 
 scripts/eks/preflight.sh
 scripts/eks/up-ray-vllm.sh
@@ -111,7 +103,6 @@ The main values are:
 
 ```bash
 export HF_TOKEN="hf_xxx"
-export VLLM_API_KEY="supersecretkey"
 ```
 
 Then:
@@ -119,14 +110,13 @@ Then:
 - `scripts/eks/deploy-vllm.sh` creates `vllm-secrets`
 - `scripts/eks/deploy-ray-vllm.sh` creates `ray-vllm-secrets`
 
+For the active Ray path in this repo, only `HF_TOKEN` is required by the deployment manifest. `VLLM_API_KEY` is optional and only used by local benchmark helpers if you want to pass a bearer token explicitly.
+
 Do **not** commit real secrets into the repo. The `.gitignore` already ignores common `secrets*` files.
 
 ## Overlays in this repo
 
-- **Option 3 primary path:** `.kube/eks/ray/ray-vllm-service.yaml` using **122B-A10B** with **TP=2 + PP=2** across 2 nodes
-- **Option 2 later path:** `.kube/eks/vllm-option2/` using **TP=4 + PP=1** on 1 node
-- **122B MoE-friendly fallback path:** `.kube/eks/ray/ray-vllm-122b-a10b.yaml` using **TP=4 + PP=1** across 4 GPUs total
-- **Plain non-Ray sanity path:** `.kube/eks/vllm/`
+- **Active path:** `.eks/ray/ray-vllm-service.yaml` using **122B-A10B** with **TP=2 + PP=2** across 2 nodes
 
 ## Regional fallback
 
@@ -137,7 +127,7 @@ If `g7e` is unavailable in your target region, use a `g6e.*` fallback in `terraf
 ### Stop only the workloads
 
 ```bash
-kubectl -n inference-engine delete statefulset vllm-server
+kubectl -n inference-engine delete deployment vllm-server
 kubectl -n inference-engine delete rayservice ray-vllm
 ```
 
@@ -148,6 +138,77 @@ Edit `terraform/stacks/eks-inference/terraform.tfvars` and reduce the node count
 ```bash
 scripts/eks/plan.sh
 scripts/eks/apply.sh
+```
+
+## Reconfiguring node groups with Terraform
+
+This repo uses **EKS managed node groups** with fixed sizes:
+
+- inference group: `min_size = max_size = desired_size = node_group_size`
+- system group: `min_size = max_size = desired_size = system_node_group_size`
+
+So when you change node settings in `terraform/stacks/eks-inference/terraform.tfvars`, the operational effect is usually:
+
+1. run `scripts/eks/plan.sh`
+2. review whether Terraform will **scale** or **replace** nodes
+3. run `scripts/eks/apply.sh`
+4. refresh kubeconfig if needed: `scripts/eks/kubeconfig.sh`
+5. revalidate the cluster and workloads
+
+If you want to preserve multiple node / EC2 layouts for different experiments, keep multiple local tfvars files under this stack directory and point the wrappers at the one you want with `TFVARS_FILE`.
+
+Example:
+
+```bash
+cp terraform/stacks/eks-inference/terraform.tfvars terraform/stacks/eks-inference/terraform.g7e-2x2.tfvars
+cp terraform/stacks/eks-inference/terraform.tfvars terraform/stacks/eks-inference/terraform.g7e-1x4.tfvars
+
+export TFVARS_FILE="${PWD}/terraform/stacks/eks-inference/terraform.g7e-1x4.tfvars"
+scripts/eks/plan.sh
+scripts/eks/apply.sh
+```
+
+Supported wrappers now honor `TFVARS_FILE`:
+
+- `scripts/eks/preflight.sh`
+- `scripts/eks/plan.sh`
+- `scripts/eks/apply.sh`
+- `scripts/eks/destroy.sh`
+
+### What kinds of changes do
+
+- `node_group_size` / `system_node_group_size`
+  - usually scales the managed node group up or down
+- `gpu_node_instance_types` / `system_node_instance_types`
+  - typically causes the managed node group to roll or replace nodes to match the new instance type
+- disk size changes
+  - usually require replacement of affected nodes
+
+### What to expect operationally
+
+- existing pods on changed nodes may be evicted and rescheduled
+- Ray head/worker placement may move to different nodes
+- if inference nodes are replaced, the Ray/vLLM workload may need to be redeployed or at least revalidated after the node group stabilizes
+- monitoring pods should reschedule automatically, but you should still re-check scrape targets afterward
+
+### Safe post-change sequence
+
+After a node-group reconfiguration, use:
+
+```bash
+scripts/eks/kubeconfig.sh
+scripts/eks/validate.sh
+scripts/eks/validate-monitoring.sh
+scripts/eks/validate-ray-vllm.sh
+scripts/eks/report-ray-topology.sh
+```
+
+If the Ray workload lost placement or was disrupted during node replacement, re-run:
+
+```bash
+scripts/eks/deploy-ray-vllm.sh
+scripts/eks/expose-ray-metrics.sh
+scripts/eks/validate-ray-vllm.sh
 ```
 
 ### Remove everything
@@ -207,7 +268,6 @@ So your understanding is correct: **sequence length / sequence count is not the 
 
 - `g7e.12xlarge` provides 2 × RTX PRO 6000 96GB GPUs per node
 - the primary Ray path uses `Qwen/Qwen3.5-122B-A10B` across 4 total GPUs with `tensor_parallel_size=2` and `pipeline_parallel_size=2`
-- the Option 2 overlay uses `Qwen/Qwen3.5-27B` on one `g7e.24xlarge`-class node with `tensor_parallel_size=4` and `pipeline_parallel_size=1`
 - Ray head and operators are intended to run on the separate system node
 
 ## Lighter baseline / comparison model
@@ -218,29 +278,7 @@ The repo also keeps a lighter dense comparison model around:
 
 That is useful when you want a simpler, cleaner baseline after the heavier 122B infra stress test.
 
-If you later want a cleaner model-to-model baseline, use the plain non-Ray path or the Option 2 overlay with `Qwen/Qwen3.5-27B`.
-
-If the primary TP+PP path is unstable for this MoE model, use the checked-in fallback manifest:
-
-```bash
-export RAY_MANIFEST="${PWD}/.kube/eks/ray/ray-vllm-122b-a10b.yaml"
-export RAY_SERVICE_NAME="ray-vllm-122b-a10b-tp4"
-
-scripts/eks/deploy-ray-vllm.sh
-scripts/eks/validate-ray-vllm.sh
-scripts/eks/benchmark-ray-vllm.sh
-```
-
-Important clarification:
-
-- **TP=4 / PP=1 still uses 4 GPUs total**, not 5
-- it simply puts all 4 GPUs into one tensor-parallel group
-- that means it can still run on **2 nodes × 2 GPUs**, but it no longer preserves the “2 GPUs per node as separate pipeline stages” structure
-
-So for your stated hardware intent:
-
-- **TP=2 / PP=2** = topology-aligned default
-- **TP=4 / PP=1** = same 4 GPUs, but topology-flatter fallback
+If you later want model-to-model baselines, add dedicated manifests explicitly for that purpose.
 
 ## Handling variable user input lengths
 

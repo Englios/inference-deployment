@@ -82,12 +82,6 @@ variable "single_nat_gateway" {
   default     = true
 }
 
-variable "accelerator_type" {
-  description = "Node accelerator type: nvidia or neuron."
-  type        = string
-  default     = "nvidia"
-}
-
 variable "gpu_node_instance_types" {
   description = "GPU instance types for NVIDIA-backed nodes."
   type        = list(string)
@@ -98,12 +92,6 @@ variable "system_node_instance_types" {
   description = "General-purpose instance types for untained system nodes."
   type        = list(string)
   default     = ["t3.large"]
-}
-
-variable "neuron_node_instance_types" {
-  description = "Inferentia instance types for Neuron-backed nodes."
-  type        = list(string)
-  default     = ["inf2.xlarge"]
 }
 
 variable "node_group_size" {

@@ -91,17 +91,6 @@ variable "single_nat_gateway" {
   default     = true
 }
 
-variable "accelerator_type" {
-  description = "Accelerator type for the dedicated inference node group: nvidia or neuron."
-  type        = string
-  default     = "nvidia"
-
-  validation {
-    condition     = contains(["nvidia", "neuron"], var.accelerator_type)
-    error_message = "accelerator_type must be either 'nvidia' or 'neuron'."
-  }
-}
-
 variable "gpu_node_instance_types" {
   description = "GPU instance types for NVIDIA-backed inference nodes."
   type        = list(string)
@@ -112,12 +101,6 @@ variable "system_node_instance_types" {
   description = "General-purpose instance types for the untained system node group."
   type        = list(string)
   default     = ["t3.large"]
-}
-
-variable "neuron_node_instance_types" {
-  description = "Inferentia/Neuron instance types for Neuron-backed inference nodes."
-  type        = list(string)
-  default     = ["inf2.xlarge"]
 }
 
 variable "node_group_size" {

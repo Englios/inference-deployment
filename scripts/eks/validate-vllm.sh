@@ -11,7 +11,7 @@ VLLM_API_KEY="${VLLM_API_KEY:-}"
 
 require_env VLLM_API_KEY
 
-kubectl -n "${NAMESPACE}" rollout status statefulset/vllm-server --timeout=1800s
+kubectl -n "${NAMESPACE}" rollout status deployment/vllm-server --timeout=1800s
 kubectl -n "${NAMESPACE}" port-forward svc/llm-service "${LOCAL_PORT}:80" >/tmp/vllm-port-forward.log 2>&1 &
 port_forward_pid=$!
 

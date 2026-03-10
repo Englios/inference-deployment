@@ -4,7 +4,7 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
 
 require_cmd kubectl
 
-OVERLAY_DIR="${ROOT_DIR}/.kube/eks/vllm"
+OVERLAY_DIR="${KUBE_DIR}/vllm"
 NAMESPACE="${NAMESPACE:-inference-engine}"
 
 require_env HF_TOKEN
@@ -18,4 +18,4 @@ kubectl -n "${NAMESPACE}" create secret generic vllm-secrets \
   --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl apply -k "${OVERLAY_DIR}"
-kubectl -n "${NAMESPACE}" rollout status statefulset/vllm-server --timeout=1800s
+kubectl -n "${NAMESPACE}" rollout status deployment/vllm-server --timeout=1800s

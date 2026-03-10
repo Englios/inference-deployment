@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ray-vllm-head
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+    - inference-engine
+  selector:
+    matchLabels:
+      app: ray-vllm-head
+  endpoints:
+  - port: serve
+    path: /metrics
+    interval: 30s
