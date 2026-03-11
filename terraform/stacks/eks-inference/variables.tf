@@ -126,6 +126,12 @@ variable "node_group_labels" {
   }
 }
 
+variable "node_group_taints" {
+  description = "Taints to apply to the managed node group."
+  type        = list(object({ key = string, value = string, effect = string }))
+  default     = []
+}
+
 variable "enable_ebs_csi" {
   description = "Whether to install the EBS CSI addon."
   type        = bool

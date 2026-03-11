@@ -16,4 +16,4 @@ fi
 
 tfvars_relative="${TFVARS_FILE#${STACK_DIR}/}"
 
-"${TF_BIN}" -chdir="terraform/stacks/eks-inference" destroy -var-file="${tfvars_relative}"
+"${TF_BIN}" -chdir="terraform/stacks/eks-inference" destroy -var-file="${tfvars_relative}" -auto-approve

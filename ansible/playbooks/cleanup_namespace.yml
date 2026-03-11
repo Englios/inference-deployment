@@ -23,7 +23,7 @@
 
     - name: Delete non-default secrets in inference-engine
       ansible.builtin.shell: >-
-        kubectl -n inference-engine get secret -o name | grep -v 'default-token' | xargs -r kubectl -n inference-engine delete
+        kubectl -n inference-engine get secret -o name | grep -E '(ray-vllm|dynamo-vllm|hf-token|vllm)' | xargs -r kubectl -n inference-engine delete
       args:
         chdir: "{{ repo_root }}"
       failed_when: false
