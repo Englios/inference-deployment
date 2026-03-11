@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-gpu-token-metrics
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  gpu-token-metrics.json: |
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "graphTooltip": 0,
+      "id": null,
+      "panels": [
+        {
+          "datasource": "Prometheus",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "id": 1,
+          "targets": [{"expr": "avg(DCGM_FI_DEV_GPU_UTIL) by (Hostname, gpu)", "refId": "A"}],
+          "title": "GPU Utilization (%) by Node/GPU",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "id": 2,
+          "targets": [{"expr": "max(DCGM_FI_DEV_FB_USED) by (Hostname, gpu)", "refId": "A"}],
+          "title": "GPU FB Memory Used (MiB) by Node/GPU",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "id": 3,
+          "targets": [{"expr": "avg(DCGM_FI_DEV_POWER_USAGE) by (Hostname, gpu)", "refId": "A"}],
+          "title": "GPU Power Usage (W) by Node/GPU",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "id": 4,
+          "targets": [{"expr": "max(DCGM_FI_DEV_GPU_TEMP) by (Hostname, gpu)", "refId": "A"}],
+          "title": "GPU Temperature (C) by Node/GPU",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+          "id": 5,
+          "targets": [{"expr": "sum(ray_serve_num_ongoing_http_requests{namespace=~\"$namespace\"})", "refId": "A"}],
+          "title": "Ray Serve Ongoing HTTP Requests",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+          "id": 6,
+          "targets": [{"expr": "sum(ray_serve_request_router_queue_len{namespace=~\"$namespace\"})", "refId": "A"}],
+          "title": "Ray Serve Router Queue Length",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+          "id": 7,
+          "targets": [{"expr": "sum(rate(ray_serve_num_http_requests_total{namespace=~\"$namespace\"}[1m]))", "refId": "A"}, {"expr": "sum(rate(ray_serve_deployment_request_counter_total{namespace=~\"$namespace\"}[1m]))", "refId": "B"}],
+          "title": "Ray Serve Request Throughput (req/s)",
+          "type": "timeseries"
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 39,
+      "style": "dark",
+      "tags": ["gpu", "tokens", "inference"],
+      "templating": {
+        "list": [
+          {
+            "current": {"selected": false, "text": "inference-engine", "value": "inference-engine"},
+            "datasource": "Prometheus",
+            "definition": "label_values(kube_pod_info, namespace)",
+            "includeAll": true,
+            "label": "Namespace",
+            "multi": false,
+            "name": "namespace",
+            "query": {"query": "label_values(kube_pod_info, namespace)", "refId": "Prom-NS"},
+            "refresh": 1,
+            "sort": 1,
+            "type": "query"
+          }
+        ]
+      },
+      "time": {"from": "now-1h", "to": "now"},
+      "timezone": "browser",
+      "title": "GPU + Token Metrics",
+      "uid": "gpu-token-metrics",
+      "version": 1
+    }

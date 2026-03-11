@@ -1,54 +1,56 @@
 #!/usr/bin/env python3
 
 import argparse
+import concurrent.futures
 import json
 import math
-import threading
 import time
 import urllib.request
+
+
+LONG_CONTEXT_PROMPT = " ".join(
+    [
+        "This is a long-context stress paragraph about distributed inference, scheduling, KV cache pressure, batch shaping, tensor parallel communication, and GPU memory residency."
+    ]
+    * 256
+)
 
 
 DEFAULT_TASK_SUITE = [
     {
         "name": "reasoning",
         "prompt": "A cluster has 2 nodes with 2 GPUs each. Explain how tensor parallelism 2 and pipeline parallelism 2 split one model across the hardware, and list two failure modes to watch for.",
-        "max_tokens": 768,
+        "max_tokens": 1024,
     },
     {
         "name": "summarization",
         "prompt": "Summarize the main tradeoffs between higher context length, higher concurrency, and GPU memory pressure in vLLM. Keep the answer concise and operational.",
-        "max_tokens": 640,
+        "max_tokens": 896,
     },
     {
         "name": "structured_extraction",
         "prompt": "Return JSON with keys cluster_goal, gpu_count, node_count, tensor_parallel_size, pipeline_parallel_size, and risks for this setup: one Qwen 122B-A10B model on 2 nodes with 2 GPUs each using TP=2 and PP=2.",
-        "max_tokens": 512,
+        "max_tokens": 768,
     },
     {
         "name": "code_generation",
         "prompt": "Write a short Python function that estimates total output tokens per second for a cluster given per-GPU output throughput and GPU count, then explain one limitation of that estimate.",
+        "max_tokens": 1024,
+    },
+    {
+        "name": "transformer_architecture",
+        "prompt": "Describe the main components of a transformer architecture, explain the high-level flow from input tokens to output logits, and point out where attention and feed-forward blocks appear and what role each plays.",
+        "max_tokens": 896,
+    },
+    {
+        "name": "long_context_stress",
+        "prompt": LONG_CONTEXT_PROMPT,
         "max_tokens": 768,
     },
     {
-        "name": "multimodal_transformer_diagram",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": "https://deeprevision.github.io/posts/001-transformer/transformer.png"
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": "Describe the main parts of this transformer diagram, explain the high-level flow from input to output, and point out where attention and feed-forward blocks appear.",
-                    },
-                ],
-            }
-        ],
-        "max_tokens": 768,
+        "name": "long_generation_stress",
+        "prompt": "Generate a detailed, operationally useful runbook for debugging throughput collapse in a multi-GPU inference cluster. Include sections for symptoms, likely causes, immediate checks, Prometheus/Grafana indicators, GPU/network failure signals, scaling decisions, and rollback strategy.",
+        "max_tokens": 1536,
     },
 ]
 
@@ -60,14 +62,6 @@ def http_json(url: str, api_key: str | None = None) -> dict:
         request.add_header("Authorization", f"Bearer {api_key}")
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.loads(response.read().decode())
-
-
-def http_text(url: str, api_key: str | None = None) -> str:
-    request = urllib.request.Request(url)
-    if api_key:
-        request.add_header("Authorization", f"Bearer {api_key}")
-    with urllib.request.urlopen(request, timeout=10) as response:
-        return response.read().decode()
 
 
 def discover_model(base_url: str, api_key: str) -> str:
@@ -104,76 +98,46 @@ def estimate_message_tokens(messages: list[dict]) -> int:
     return total
 
 
-def collect_metric_values(
-    metrics_text: str, metric_names: list[str]
-) -> dict[str, list[float]]:
-    collected = {metric_name: [] for metric_name in metric_names}
-
-    for raw_line in metrics_text.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-
-        metric_name = line.split("{", 1)[0].split(" ", 1)[0]
-        if metric_name not in collected:
-            continue
-
-        try:
-            value = float(line.rsplit(" ", 1)[1])
-        except (IndexError, ValueError):
-            continue
-
-        collected[metric_name].append(value)
-
-    return collected
-
-
-def summarize_metric_samples(samples: list[float]) -> dict[str, float | None]:
-    if not samples:
-        return {
-            "latest": None,
-            "max": None,
-            "avg": None,
-        }
-
-    latest = samples[-1]
-    peak = max(samples)
-    average = sum(samples) / len(samples)
-
-    if peak <= 1.0:
-        latest *= 100
-        peak *= 100
-        average *= 100
-
+def empty_metric_summary() -> dict[str, float | None]:
     return {
-        "latest": latest,
-        "max": peak,
-        "avg": average,
+        "latest": None,
+        "max": None,
+        "avg": None,
     }
 
 
-def sample_metrics(
-    base_url: str,
-    api_key: str,
-    stop_event: threading.Event,
-    metric_names: list[str],
-    interval_seconds: float = 1.0,
-) -> dict[str, list[float]]:
-    metric_samples = {metric_name: [] for metric_name in metric_names}
-
-    while not stop_event.is_set():
-        try:
-            metrics_text = http_text(f"{base_url}/metrics", api_key)
-            scrape = collect_metric_values(metrics_text, metric_names)
-            for metric_name, values in scrape.items():
-                if values:
-                    metric_samples[metric_name].append(max(values))
-        except Exception:
-            pass
-
-        stop_event.wait(interval_seconds)
-
-    return metric_samples
+def skipped_result(model: str, worker_nodes: int | None, worker_gpus: int | None, error: str) -> dict:
+    """Return a zeroed-out result dict for a task that could not be run."""
+    result: dict = {
+        "model": model,
+        "skipped": True,
+        "skip_error": error,
+        "ttft_seconds": None,
+        "total_time_seconds": None,
+        "generation_time_seconds": None,
+        "prompt_tokens": None,
+        "estimated_prompt_tokens": None,
+        "effective_prompt_tokens": None,
+        "completion_tokens": None,
+        "input_tokens_per_second": None,
+        "generation_tokens_per_second": None,
+        "total_tokens_per_second": None,
+        "worker_node_count": worker_nodes,
+        "worker_gpu_count": worker_gpus,
+        "estimated_per_node_output_tokens_per_second": None,
+        "estimated_per_gpu_output_tokens_per_second": None,
+        "kv_cache_metrics": {
+            "kv_cache_usage_percent": empty_metric_summary(),
+            "gpu_cache_usage_percent": empty_metric_summary(),
+            "cpu_cache_usage_percent": empty_metric_summary(),
+        },
+        "queue_pressure_metrics": {
+            "requests_running": empty_metric_summary(),
+            "requests_waiting": empty_metric_summary(),
+        },
+    }
+    result["summary_text"] = f"Skipped: {error}"
+    return result
 
 
 def average(values: list[float | None]) -> float | None:
@@ -225,6 +189,7 @@ def build_task_suite_summary(summary: dict) -> str:
 
 def benchmark(
     base_url: str,
+    metrics_url: str,
     api_key: str,
     model: str,
     prompt: str,
@@ -233,13 +198,6 @@ def benchmark(
     worker_gpus: int | None = None,
     messages: list[dict] | None = None,
 ) -> dict:
-    kv_metric_names = [
-        "vllm:kv_cache_usage_perc",
-        "vllm:gpu_cache_usage_perc",
-        "vllm:cpu_cache_usage_perc",
-        "vllm:num_requests_running",
-        "vllm:num_requests_waiting",
-    ]
     body = json.dumps(
         {
             "model": model,
@@ -266,20 +224,6 @@ def benchmark(
     finished = None
     prompt_tokens = None
     completion_tokens = None
-    metrics_stop_event = threading.Event()
-    sampled_metrics: dict[str, list[float]] = {}
-
-    def sampler() -> None:
-        nonlocal sampled_metrics
-        sampled_metrics = sample_metrics(
-            base_url,
-            api_key,
-            metrics_stop_event,
-            kv_metric_names,
-        )
-
-    sampler_thread = threading.Thread(target=sampler, daemon=True)
-    sampler_thread.start()
 
     try:
         with urllib.request.urlopen(request, timeout=600) as response:
@@ -306,8 +250,7 @@ def benchmark(
                     prompt_tokens = usage.get("prompt_tokens")
                     completion_tokens = usage.get("completion_tokens")
     finally:
-        metrics_stop_event.set()
-        sampler_thread.join(timeout=2)
+        pass
 
     if finished is None:
         finished = time.perf_counter()
@@ -346,24 +289,14 @@ def benchmark(
         )
 
     kv_cache_metrics = {
-        "kv_cache_usage_percent": summarize_metric_samples(
-            sampled_metrics.get("vllm:kv_cache_usage_perc", [])
-        ),
-        "gpu_cache_usage_percent": summarize_metric_samples(
-            sampled_metrics.get("vllm:gpu_cache_usage_perc", [])
-        ),
-        "cpu_cache_usage_percent": summarize_metric_samples(
-            sampled_metrics.get("vllm:cpu_cache_usage_perc", [])
-        ),
+        "kv_cache_usage_percent": empty_metric_summary(),
+        "gpu_cache_usage_percent": empty_metric_summary(),
+        "cpu_cache_usage_percent": empty_metric_summary(),
     }
 
     queue_pressure_metrics = {
-        "requests_running": summarize_metric_samples(
-            sampled_metrics.get("vllm:num_requests_running", [])
-        ),
-        "requests_waiting": summarize_metric_samples(
-            sampled_metrics.get("vllm:num_requests_waiting", [])
-        ),
+        "requests_running": empty_metric_summary(),
+        "requests_waiting": empty_metric_summary(),
     }
 
     result = {
@@ -393,33 +326,64 @@ def benchmark(
 
 def run_task_suite(
     base_url: str,
+    metrics_url: str,
     api_key: str,
     model: str,
     worker_nodes: int | None = None,
     worker_gpus: int | None = None,
+    rounds: int = 1,
+    concurrency: int = 1,
 ) -> dict:
     task_results = []
+    expanded_tasks: list[tuple[int, dict]] = []
+    for round_index in range(rounds):
+        for task in DEFAULT_TASK_SUITE:
+            expanded_tasks.append((round_index + 1, task))
 
-    for task in DEFAULT_TASK_SUITE:
-        result = benchmark(
-            base_url,
-            api_key,
-            model,
-            task.get("prompt", ""),
-            int(task["max_tokens"]),
-            worker_nodes=worker_nodes,
-            worker_gpus=worker_gpus,
-            messages=task.get("messages"),
-        )
-        task_results.append(
-            {
-                "name": task["name"],
-                "prompt": task.get("prompt"),
-                "messages": task.get("messages"),
-                "max_tokens": task["max_tokens"],
-                "result": result,
-            }
-        )
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max(1, concurrency)
+    ) as executor:
+        future_map = {
+            executor.submit(
+                benchmark,
+                base_url,
+                metrics_url,
+                api_key,
+                model,
+                task.get("prompt", ""),
+                int(task["max_tokens"]),
+                worker_nodes,
+                worker_gpus,
+                task.get("messages"),
+            ): (round_number, task)
+            for round_number, task in expanded_tasks
+        }
+
+        for future in concurrent.futures.as_completed(future_map):
+            round_number, task = future_map[future]
+            try:
+                result = future.result()
+            except Exception as exc:
+                print(
+                    f"  [WARN] task '{task['name']}' round {round_number} skipped: {exc}",
+                    flush=True,
+                )
+                result = skipped_result(model, worker_nodes, worker_gpus, str(exc))
+            task_results.append(
+                {
+                    "name": task["name"],
+                    "round": round_number,
+                    "max_tokens": task["max_tokens"],
+                    "input_type": "messages" if task.get("messages") else "prompt",
+                    "estimated_input_tokens": estimate_message_tokens(
+                        task.get("messages")
+                        or [{"role": "user", "content": task.get("prompt", "")}]
+                    ),
+                    "result": result,
+                }
+            )
+
+    task_results.sort(key=lambda item: (item["round"], item["name"]))
 
     summary = {
         "task_count": len(task_results),
@@ -498,8 +462,112 @@ def run_task_suite(
         "model": model,
         "worker_node_count": worker_nodes,
         "worker_gpu_count": worker_gpus,
+        "rounds": rounds,
+        "concurrency": concurrency,
         "summary": summary,
         "tasks": task_results,
+    }
+    result["summary_text"] = build_task_suite_summary(summary)
+    return result
+
+
+def run_repeated_prompt_benchmark(
+    base_url: str,
+    metrics_url: str,
+    api_key: str,
+    model: str,
+    prompt: str,
+    max_tokens: int,
+    worker_nodes: int | None = None,
+    worker_gpus: int | None = None,
+    rounds: int = 1,
+    concurrency: int = 1,
+) -> dict:
+    run_results = []
+
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max(1, concurrency)
+    ) as executor:
+        futures = [
+            executor.submit(
+                benchmark,
+                base_url,
+                metrics_url,
+                api_key,
+                model,
+                prompt,
+                max_tokens,
+                worker_nodes,
+                worker_gpus,
+                None,
+            )
+            for _ in range(rounds)
+        ]
+
+        for idx, future in enumerate(concurrent.futures.as_completed(futures), start=1):
+            try:
+                result = future.result()
+            except Exception as exc:
+                print(f"  [WARN] round {idx} skipped: {exc}", flush=True)
+                result = skipped_result(model, worker_nodes, worker_gpus, str(exc))
+            run_results.append({"round": idx, "result": result})
+
+    summary = {
+        "task_count": len(run_results),
+        "avg_ttft_seconds": average(
+            [item["result"]["ttft_seconds"] for item in run_results]
+        ),
+        "avg_total_time_seconds": average(
+            [item["result"]["total_time_seconds"] for item in run_results]
+        ),
+        "avg_input_tokens_per_second": average(
+            [item["result"]["input_tokens_per_second"] for item in run_results]
+        ),
+        "avg_generation_tokens_per_second": average(
+            [item["result"]["generation_tokens_per_second"] for item in run_results]
+        ),
+        "avg_total_tokens_per_second": average(
+            [item["result"]["total_tokens_per_second"] for item in run_results]
+        ),
+        "max_kv_cache_usage_percent": maximum(
+            [
+                item["result"]["kv_cache_metrics"]["kv_cache_usage_percent"]["max"]
+                for item in run_results
+            ]
+        ),
+        "avg_kv_cache_usage_percent": average(
+            [
+                item["result"]["kv_cache_metrics"]["kv_cache_usage_percent"]["avg"]
+                for item in run_results
+            ]
+        ),
+        "max_requests_waiting": maximum(
+            [
+                item["result"]["queue_pressure_metrics"]["requests_waiting"]["max"]
+                for item in run_results
+            ]
+        ),
+        "avg_requests_waiting": average(
+            [
+                item["result"]["queue_pressure_metrics"]["requests_waiting"]["avg"]
+                for item in run_results
+            ]
+        ),
+        "avg_requests_running": average(
+            [
+                item["result"]["queue_pressure_metrics"]["requests_running"]["avg"]
+                for item in run_results
+            ]
+        ),
+    }
+
+    result = {
+        "mode": "repeated_prompt",
+        "model": model,
+        "rounds": rounds,
+        "concurrency": concurrency,
+        "summary": summary,
+        "runs": run_results,
     }
     result["summary_text"] = build_task_suite_summary(summary)
     return result
@@ -510,6 +578,7 @@ def main() -> None:
         description="Benchmark TTFT and generation speed for a vLLM endpoint."
     )
     parser.add_argument("--base-url", default="http://127.0.0.1:18000")
+    parser.add_argument("--metrics-url")
     parser.add_argument("--api-key", required=True)
     parser.add_argument("--model")
     parser.add_argument(
@@ -519,6 +588,8 @@ def main() -> None:
     parser.add_argument("--max-tokens", type=int, default=256)
     parser.add_argument("--worker-nodes", type=int)
     parser.add_argument("--worker-gpus", type=int)
+    parser.add_argument("--rounds", type=int, default=1)
+    parser.add_argument("--concurrency", type=int, default=1)
     parser.add_argument(
         "--task-suite",
         action="store_true",
@@ -527,23 +598,30 @@ def main() -> None:
     args = parser.parse_args()
 
     model = args.model or discover_model(args.base_url, args.api_key)
+    metrics_url = args.metrics_url or f"{args.base_url}/metrics"
     if args.task_suite:
         result = run_task_suite(
             args.base_url,
+            metrics_url,
             args.api_key,
             model,
             worker_nodes=args.worker_nodes,
             worker_gpus=args.worker_gpus,
+            rounds=args.rounds,
+            concurrency=args.concurrency,
         )
     else:
-        result = benchmark(
+        result = run_repeated_prompt_benchmark(
             args.base_url,
+            metrics_url,
             args.api_key,
             model,
             args.prompt,
             args.max_tokens,
             worker_nodes=args.worker_nodes,
             worker_gpus=args.worker_gpus,
+            rounds=args.rounds,
+            concurrency=args.concurrency,
         )
     print(json.dumps(result, indent=2))
 

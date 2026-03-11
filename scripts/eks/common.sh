@@ -7,6 +7,8 @@ STACK_DIR="${ROOT_DIR}/terraform/stacks/eks-inference"
 TF_BIN="${ROOT_DIR}/scripts/eks/terraform.sh"
 EKS_DIR="${ROOT_DIR}/.eks"
 KUBE_DIR="${ROOT_DIR}/.kube"
+EKS_RENDERED_DIR="${EKS_DIR}/rendered"
+EKS_INFERENCE_CONFIG="${EKS_INFERENCE_CONFIG:-${EKS_DIR}/inference-profile.json}"
 
 require_cmd() {
   local cmd="$1"
@@ -32,4 +34,10 @@ run_step() {
 
   echo "==> ${label}"
   "$@"
+}
+
+config_value() {
+  python3 "${ROOT_DIR}/scripts/eks/inference_config.py" \
+    --config "${EKS_INFERENCE_CONFIG}" \
+    --get "$1"
 }

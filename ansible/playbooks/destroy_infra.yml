@@ -1,0 +1,14 @@
+---
+- name: Destroy EKS experiment infrastructure
+  hosts: localhost
+  gather_facts: false
+  environment:
+    AWS_PROFILE: "{{ aws_profile | default(lookup('env', 'AWS_PROFILE'), true) }}"
+    AWS_REGION: "{{ aws_region | default(lookup('env', 'AWS_REGION') | default('us-west-2', true), true) }}"
+    AWS_DEFAULT_OUTPUT: "{{ aws_default_output | default(lookup('env', 'AWS_DEFAULT_OUTPUT') | default('json', true), true) }}"
+    TFVARS_FILE: "{{ tfvars_file | default(lookup('env', 'TFVARS_FILE') | default(repo_root ~ '/terraform/stacks/eks-inference/terraform.tfvars', true), true) }}"
+  tasks:
+    - name: Destroy Terraform-managed infrastructure
+      ansible.builtin.command: ./scripts/eks/destroy.sh
+      args:
+        chdir: "{{ repo_root }}"

@@ -1,0 +1,84 @@
+{
+  "namespace": "inference-engine",
+  "model": {
+    "id": "Qwen3-30B-A3B",
+    "source": "Qwen/Qwen3-30B-A3B",
+    "served_name": "Qwen3-30B-A3B"
+  },
+  "engine": {
+    "name": "vllm",
+    "framework": "vllm",
+    "tensor_parallel_size": 1,
+    "pipeline_parallel_size": 2,
+    "data_parallel_size": 1,
+    "max_model_len": 40960,
+    "gpu_memory_utilization": 0.9,
+    "transformers_version": "4.57.0",
+    "vllm_allreduce_use_symm_mem": "0",
+    "block_size": 128,
+    "max_num_seqs": 12
+  },
+  "runtime": {
+    "http_port": 8000,
+    "metrics_port": 9090,
+    "metrics_interval": "30s",
+    "network_peak_bandwidth_gbps": 100,
+    "prometheus_host": "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090",
+    "grafana_host": "http://127.0.0.1:3000",
+    "grafana_iframe_host": "http://127.0.0.1:3000"
+  },
+  "ray": {
+    "service_name": "ray-vllm",
+    "ray_version": "2.52.0",
+    "image": "anyscale/ray-llm:2.54.0-py311-cu128",
+    "dashboard_port": 8265,
+    "gcs_port": 6379,
+    "client_port": 10001,
+    "head": {
+      "gpus": 1,
+      "cpu_request": "8",
+      "cpu_limit": "16",
+      "memory_request": "48Gi",
+      "memory_limit": "64Gi"
+    },
+    "worker": {
+      "replicas": 1,
+      "min_replicas": 1,
+      "max_replicas": 1,
+      "hosts": 1,
+      "gpus": 1,
+      "cpu_request": "8",
+      "cpu_limit": "16",
+      "memory_request": "48Gi",
+      "memory_limit": "64Gi"
+    },
+    "autoscaling": {
+      "target_ongoing_requests": 4,
+      "max_ongoing_requests": 8,
+      "health_check_period_s": 30,
+      "health_check_timeout_s": 900,
+      "graceful_shutdown_timeout_s": 120,
+      "graceful_shutdown_wait_loop_s": 10
+    }
+  },
+  "dynamo": {
+    "deployment_mode": "agg",
+    "graph_name": "dynamo-vllm-agg",
+    "frontend_replicas": 1,
+    "worker_replicas": 1,
+    "image": "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.8.0",
+    "model_cache_pvc": "model-cache",
+    "worker_gpu_count": 1,
+    "worker_cpu_request": "4",
+    "worker_cpu_limit": "8",
+    "worker_memory_request": "16Gi",
+    "worker_memory_limit": "32Gi",
+    "worker_shared_memory": "20Gi"
+  },
+  "scheduling": {
+    "accelerator_label": "nvidia-gpu",
+    "workload_label": "inference",
+    "dedicated_taint_key": "dedicated",
+    "dedicated_taint_value": "inference"
+  }
+}

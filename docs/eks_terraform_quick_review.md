@@ -20,7 +20,7 @@ This is intentionally a testbed, not a final production platform.
 - Terraform stack under `terraform/stacks/eks-inference`
 - reusable module under `terraform/modules/eks-inference`
 - AWS preflight checks
-- KubeRay path for the primary **TP=2 + PP=2** multi-node sharded test
+- KubeRay path for the shared-profile **TP/PP** multi-node sharded test
 - benchmark helpers for TTFT, generation speed, and GPU usage
 - Prometheus/Grafana + DCGM monitoring for metrics capture
 
@@ -30,11 +30,11 @@ This is intentionally a testbed, not a final production platform.
 
 No. vLLM supports multi-node sharding with or without Ray.
 
-We chose **Ray/KubeRay** as the primary Option 3 path because the goal is now explicit **cross-node TP+PP sharding** for one model across 4 GPUs.
+We chose **Ray/KubeRay** as the primary Option 3 path because the goal is explicit **cross-node TP+PP sharding** for one model across 4 GPUs.
 
 The current mapping is:
 
-- **Option 3 (primary):** 2 nodes × 2 GPUs, using **TP=2 + PP=2** with `Qwen/Qwen3.5-122B-A10B`
+- **Option 3 (primary):** 2 nodes × 2 GPUs, using the shared inference profile for **TP=2 + PP=2** multi-node sharding
 
 
 ## Recommended review order
@@ -42,13 +42,18 @@ The current mapping is:
 1. `docs/eks_terraform_quick_review.md`
 2. `terraform/stacks/eks-inference/README.md`
 3. `terraform/modules/eks-inference/main.tf`
-4. `.eks/ray/ray-vllm-service.yaml`
+4. `.eks/inference-profile.json`
 
 ## Minimal commands worth knowing
 
 ```bash
-scripts/eks/preflight.sh
-scripts/eks/up-ray-vllm.sh
-scripts/eks/benchmark-ray-vllm.sh
-scripts/eks/collect-gpu-metrics.sh
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/infra_apply.yml \
+  -e repo_root="$PWD" \
+  -e tfvars_file="$PWD/terraform/stacks/eks-inference/terraform.g7e-2x2.tfvars"
+
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/lane_deploy.yml \
+  -e repo_root="$PWD" -e lane=ray-vllm
+
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/lane_run.yml \
+  -e repo_root="$PWD" -e lane=ray-vllm -e task_suite=1
 ```

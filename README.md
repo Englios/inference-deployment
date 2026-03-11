@@ -31,8 +31,27 @@ See the [alif-homelab](https://github.com/Englios/alif-homelab) repo for the bas
 
 1. Review the deployment playbook: `docs/hybrid_gpu_inference_playbook.md`
 2. Read the research notes for background and experiments: `docs/LLM Inference on GPU_ Research Notes.md`
-3. Follow the steps in the playbook for environment setup (drivers, CUDA, container runtime) and model serving.
+3. Use the Ansible workflows in `ansible/README.md` for EKS experiment operations.
 4. Rotate gateway client auth keys when needed: `scripts/rotate_gateway_keys.sh`
+
+### EKS operator interface
+
+Use Ansible as the supported interface for EKS experiment workflows:
+
+```bash
+export HF_TOKEN=...
+export AWS_PROFILE=dpro-gpu-test
+export AWS_REGION=us-west-2
+export AWS_DEFAULT_OUTPUT=json
+export VLLM_API_KEY=...
+export TFVARS_FILE="$PWD/terraform/stacks/eks-inference/terraform.g7e-2x2.tfvars"
+
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/experiment.yml \
+  -e lane=ray-vllm \
+  -e task_suite=1
+```
+
+Shell scripts under `scripts/eks/` are internal backend implementation details for those playbooks.
 
 ## Documentation
 

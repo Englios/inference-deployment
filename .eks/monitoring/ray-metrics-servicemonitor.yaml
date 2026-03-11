@@ -11,6 +11,9 @@ spec:
     matchLabels:
       app: ray-head-metrics
   endpoints:
-  - port: dashboard
+  - port: metrics
     path: /metrics
+    interval: 30s
+  - port: dashboard
+    path: /api/prometheus_metrics
     interval: 30s

@@ -1,0 +1,80 @@
+---
+- name: Run end-to-end EKS experiment workflow
+  hosts: localhost
+  gather_facts: false
+  pre_tasks:
+    - name: Validate required AWS profile variable
+      ansible.builtin.assert:
+        that:
+          - (aws_profile | default(lookup('env', 'AWS_PROFILE'), true)) | length > 0
+        fail_msg: "AWS_PROFILE is required (export AWS_PROFILE=... or pass -e aws_profile=...)."
+
+    - name: Validate required HF token variable
+      ansible.builtin.assert:
+        that:
+          - (hf_token | default(lookup('env', 'HF_TOKEN'), true)) | length > 0
+        fail_msg: "HF_TOKEN is required (export HF_TOKEN=... or pass -e hf_token=...)."
+
+  environment:
+    AWS_PROFILE: "{{ aws_profile | default(lookup('env', 'AWS_PROFILE'), true) }}"
+    AWS_REGION: "{{ aws_region | default(lookup('env', 'AWS_REGION') | default('us-west-2', true), true) }}"
+    AWS_DEFAULT_OUTPUT: "{{ aws_default_output | default(lookup('env', 'AWS_DEFAULT_OUTPUT') | default('json', true), true) }}"
+    HF_TOKEN: "{{ hf_token | default(lookup('env', 'HF_TOKEN'), true) }}"
+    VLLM_API_KEY: "{{ vllm_api_key | default(lookup('env', 'VLLM_API_KEY') | default('', true), true) }}"
+  tasks:
+    - name: Run preflight checks
+      ansible.builtin.command: ./scripts/eks/preflight.sh
+      args:
+        chdir: "{{ repo_root }}"
+      when: run_preflight | default(true) | bool
+
+    - name: Install monitoring stack
+      ansible.builtin.command: ./scripts/eks/install-monitoring.sh
+      args:
+        chdir: "{{ repo_root }}"
+      when: run_monitoring | default(true) | bool
+
+    - name: Validate monitoring stack
+      ansible.builtin.command: ./scripts/eks/validate-monitoring.sh
+      args:
+        chdir: "{{ repo_root }}"
+      when: run_monitoring | default(true) | bool
+
+    - name: Deploy Ray-backed vLLM lane
+      ansible.builtin.command: ./scripts/eks/install-kuberay.sh && ./scripts/eks/deploy-ray-vllm.sh && ./scripts/eks/expose-ray-metrics.sh && ./scripts/eks/validate-ray-vllm.sh && ./scripts/eks/validate-monitoring.sh && ./scripts/eks/report-ray-topology.sh
+      args:
+        chdir: "{{ repo_root }}"
+      when: lane == 'ray-vllm'
+
+    - name: Deploy Kubernetes vLLM lane
+      ansible.builtin.command: ./scripts/eks/deploy-vllm.sh && ./scripts/eks/validate-vllm.sh
+      args:
+        chdir: "{{ repo_root }}"
+      when: lane == 'k8s-vllm'
+
+    - name: Deploy Dynamo-backed vLLM lane
+      ansible.builtin.command: ./scripts/eks/deploy-dynamo-vllm.sh && ./scripts/eks/expose-dynamo-metrics.sh && ./scripts/eks/validate-dynamo-vllm.sh && ./scripts/eks/validate-monitoring.sh && ./scripts/eks/report-dynamo-topology.sh
+      args:
+        chdir: "{{ repo_root }}"
+      when: lane == 'dynamo-vllm'
+
+    - name: Fail for unsupported lane deploy target
+      ansible.builtin.fail:
+        msg: "Unsupported lane={{ lane }}. Supported lanes: ray-vllm, k8s-vllm, dynamo-vllm."
+      when: lane not in ['ray-vllm', 'k8s-vllm', 'dynamo-vllm']
+
+    - name: Run lane validation/benchmark/topology/observed capture
+      ansible.builtin.command: ./scripts/eks/run-lane.sh
+      args:
+        chdir: "{{ repo_root }}"
+      environment:
+        LANE: "{{ lane }}"
+        TASK_SUITE: "{{ task_suite | string }}"
+        EXPERIMENT_TIMESTAMP: "{{ experiment_timestamp | default('') }}"
+        EXPERIMENT_DIR: "{{ experiment_dir | default('') }}"
+        PROM_NAMESPACE: "{{ prom_namespace | default('monitoring') }}"
+        PROM_SERVICE: "{{ prom_service | default('kube-prometheus-stack-prometheus') }}"
+        SKIP_VALIDATE: "{{ skip_validate | default(true) | ternary('true','false') }}"
+        SKIP_STARTUP_LATENCY: "{{ skip_startup_latency | default(true) | ternary('true','false') }}"
+        BENCHMARK_ROUNDS: "{{ benchmark_rounds | default(2) | string }}"
+        BENCHMARK_CONCURRENCY: "{{ benchmark_concurrency | default(2) | string }}"

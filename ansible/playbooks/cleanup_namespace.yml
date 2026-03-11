@@ -1,0 +1,35 @@
+---
+- name: Clean inference-engine namespace resources
+  hosts: localhost
+  gather_facts: false
+  environment:
+    AWS_PROFILE: "{{ aws_profile | default(lookup('env', 'AWS_PROFILE'), true) }}"
+    AWS_REGION: "{{ aws_region | default(lookup('env', 'AWS_REGION') | default('us-west-2', true), true) }}"
+    AWS_DEFAULT_OUTPUT: "{{ aws_default_output | default(lookup('env', 'AWS_DEFAULT_OUTPUT') | default('json', true), true) }}"
+  tasks:
+    - name: Delete workload resources in inference-engine
+      ansible.builtin.command: >-
+        kubectl -n inference-engine delete all --all --timeout=180s
+      args:
+        chdir: "{{ repo_root }}"
+      failed_when: false
+
+    - name: Delete PVCs in inference-engine
+      ansible.builtin.command: >-
+        kubectl -n inference-engine delete pvc --all --timeout=180s
+      args:
+        chdir: "{{ repo_root }}"
+      failed_when: false
+
+    - name: Delete non-default secrets in inference-engine
+      ansible.builtin.shell: >-
+        kubectl -n inference-engine get secret -o name | grep -v 'default-token' | xargs -r kubectl -n inference-engine delete
+      args:
+        chdir: "{{ repo_root }}"
+      failed_when: false
+
+    - name: Show remaining resources
+      ansible.builtin.command: kubectl -n inference-engine get all
+      args:
+        chdir: "{{ repo_root }}"
+      failed_when: false

@@ -1,0 +1,20 @@
+---
+- name: Prepare monitoring stack
+  hosts: localhost
+  gather_facts: false
+  environment:
+    AWS_PROFILE: "{{ aws_profile | default(lookup('env', 'AWS_PROFILE'), true) }}"
+    AWS_REGION: "{{ aws_region | default(lookup('env', 'AWS_REGION') | default('us-west-2', true), true) }}"
+    AWS_DEFAULT_OUTPUT: "{{ aws_default_output | default(lookup('env', 'AWS_DEFAULT_OUTPUT') | default('json', true), true) }}"
+  tasks:
+    - name: Install or upgrade monitoring
+      ansible.builtin.command: ./scripts/eks/install-monitoring.sh
+      args:
+        chdir: "{{ repo_root }}"
+      when: run_monitoring | default(true) | bool
+
+    - name: Validate monitoring
+      ansible.builtin.command: ./scripts/eks/validate-monitoring.sh
+      args:
+        chdir: "{{ repo_root }}"
+      when: run_monitoring | default(true) | bool

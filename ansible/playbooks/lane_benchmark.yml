@@ -1,0 +1,12 @@
+---
+- name: Benchmark experiment lane
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Benchmark lane
+      ansible.builtin.command: ./scripts/eks/benchmark-lane.sh
+      args:
+        chdir: "{{ repo_root }}"
+      environment:
+        LANE: "{{ lane }}"
+        TASK_SUITE: "{{ task_suite | default(0) | string }}"

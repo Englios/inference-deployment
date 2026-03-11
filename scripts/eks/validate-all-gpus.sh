@@ -49,7 +49,23 @@ rendered = (template
 print(rendered)
 PY
 
-  kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/"${pod_name}" --timeout=300s
-  echo "===== ${node} (${gpu_count} GPUs) ====="
-  kubectl logs "${pod_name}"
+  if kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/"${pod_name}" --timeout=300s; then
+    echo "===== ${node} (${gpu_count} GPUs) ====="
+    kubectl logs "${pod_name}"
+    continue
+  fi
+
+  fallback_pod="$(kubectl get pod -n inference-engine -o jsonpath='{range .items[*]}{.metadata.name}{"|"}{.spec.nodeName}{"|"}{.status.phase}{"\n"}{end}' | awk -F'|' -v node="${node}" '$2==node && $3=="Running" {print $1; exit}')"
+
+  if [[ -n "${fallback_pod}" ]]; then
+    echo "===== ${node} (${gpu_count} GPUs) [fallback pod: ${fallback_pod}] ====="
+    kubectl -n inference-engine exec "${fallback_pod}" -- nvidia-smi || {
+      echo "Fallback nvidia-smi execution failed on pod ${fallback_pod} for node ${node}." >&2
+      exit 1
+    }
+    continue
+  fi
+
+  echo "nvidia-smi validation failed for node ${node}: probe pod unschedulable and no running fallback GPU workload pod on node." >&2
+  exit 1
 done

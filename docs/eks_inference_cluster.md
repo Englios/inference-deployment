@@ -15,13 +15,30 @@ This repo now includes a Terraform stack for provisioning an AWS EKS cluster aim
 
 ```bash
 cp terraform/stacks/eks-inference/terraform.tfvars.example terraform/stacks/eks-inference/terraform.tfvars
-scripts/eks/preflight.sh
-scripts/eks/up-ray-vllm.sh
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/infra_apply.yml \
+  -e repo_root="$PWD" \
+  -e tfvars_file="$PWD/terraform/stacks/eks-inference/terraform.tfvars"
+
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/monitoring_refresh.yml \
+  -e repo_root="$PWD"
+```
+
+Then, once Prometheus/Grafana is healthy, continue with the Ray/vLLM deployment path:
+
+```bash
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/lane_deploy.yml \
+  -e repo_root="$PWD" -e lane=ray-vllm
 ```
 
 These scripts are convenience wrappers around standard Terraform and Kubernetes commands.
 
 The Ray EKS flow now also installs a lightweight monitoring stack (`kube-prometheus-stack` + `dcgm-exporter`) so future runs retain Prometheus and GPU metrics. Monitoring is split into separate scrape targets for Ray head metrics and the vLLM serving endpoint.
+
+Use `ansible/playbooks/monitoring_refresh.yml` when you want Prometheus/Grafana up and validated before deploying Ray/vLLM. Override the Grafana bootstrap password from your shell if needed:
+
+```bash
+export GRAFANA_ADMIN_PASSWORD='change-me'
+```
 
 ## Current target topology
 
@@ -31,7 +48,7 @@ The repo is tuned for the active Ray multi-node path:
 - each node shaped like `g7e.12xlarge`
 - one model sharded across **4 total GPUs**
 - Ray-backed execution with **tensor_parallel_size=2** and **pipeline_parallel_size=2**
-- model: `Qwen/Qwen3.5-122B-A10B`
+- model: shared-profile driven (current default: `openai/gpt-oss-120b`)
 - inter-node network class on G7e: **400 Gbps with EFA support**
 
 ## Why Ray is the default now
@@ -63,53 +80,59 @@ kubectl -n inference-engine delete rayservice ray-vllm
 Edit `terraform/stacks/eks-inference/terraform.tfvars` and reduce the node counts, then apply again:
 
 ```bash
-scripts/eks/plan.sh
-scripts/eks/apply.sh
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/infra_apply.yml \
+  -e repo_root="$PWD" \
+  -e tfvars_file="$PWD/terraform/stacks/eks-inference/terraform.tfvars"
 ```
 
 ### Remove everything
 
 ```bash
-scripts/eks/destroy.sh
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/destroy_infra.yml \
+  -e repo_root="$PWD" \
+  -e tfvars_file="$PWD/terraform/stacks/eks-inference/terraform.tfvars"
 ```
 
 That is the full Terraform teardown path for the EKS stack.
 
 ## Model choice
 
-For this topology-matched EKS path, the repo now uses:
+For this topology-matched EKS path, the repo now uses the shared profile in `.eks/inference-profile.json`.
 
-- **Primary model:** `Qwen/Qwen3.5-122B-A10B`
+- **Current default model:** `openai/gpt-oss-120b`
 - **Runtime:** vLLM
-- **Reasoning parser:** `qwen3`
+- **Topology default:** `TP=2`, `PP=2`
 
 We are not using `unsloth/Qwen3.5-27B-GGUF` here because GGUF is a better fit for llama.cpp-style runtimes than for the vLLM GPU path used in this repo.
+
+The heavier Qwen 122B-A10B path remains a valid stress-profile candidate, but it is no longer the default checked-in profile.
 
 The lighter dense comparison model kept in the repo is:
 
 - `Qwen/Qwen3.5-27B`
 
-## Why 122B-A10B is the primary stress profile now
+## Why 122B-A10B is still a useful stress profile
 
-`Qwen/Qwen3.5-122B-A10B` is an **MoE** model and a heavier infra target for this 4 × 96GB setup.
+`Qwen/Qwen3.5-122B-A10B` is an **MoE** model and remains a useful heavier infra target for this 4 × 96GB setup when you intentionally switch the shared profile to that stress case.
 
 If your main question is **"how will the infra hold up?"** rather than **"which model is better?"**, this is a reasonable primary stress profile.
 
-The primary path keeps your original topology-first intent by using **TP=2 + PP=2**.
+If you want that heavier lane again, switch the shared profile rather than editing manifests directly.
 
 ## Performance checks to run later
 
 Once the service is up, use:
 
 ```bash
-scripts/eks/benchmark-ray-vllm.sh
-scripts/eks/collect-gpu-metrics.sh
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/lane_run.yml \
+  -e repo_root="$PWD" -e lane=ray-vllm -e task_suite=1
 ```
 
 To compare multiple context-window settings with the same benchmark prompt:
 
 ```bash
-scripts/eks/context-sweep.sh
+ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/context_sweep.yml \
+  -e repo_root="$PWD"
 ```
 
 These scripts are intended to report:

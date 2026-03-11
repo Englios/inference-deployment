@@ -2,6 +2,16 @@ serviceMonitor:
   enabled: true
   interval: 30s
 
+nodeSelector:
+  accelerator: nvidia-gpu
+  workload: inference
+
+tolerations:
+- key: dedicated
+  operator: Equal
+  value: inference
+  effect: NoSchedule
+
 resources:
   requests:
     cpu: 100m
@@ -9,13 +19,3 @@ resources:
   limits:
     cpu: 200m
     memory: 256Mi
-
-affinity:
-  nodeAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      nodeSelectorTerms:
-      - matchExpressions:
-        - key: accelerator
-          operator: In
-          values:
-          - nvidia-gpu

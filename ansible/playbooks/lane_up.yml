@@ -1,0 +1,32 @@
+---
+- name: Bring up experiment lane
+  hosts: localhost
+  gather_facts: false
+  environment:
+    AWS_PROFILE: "{{ aws_profile | default(lookup('env', 'AWS_PROFILE'), true) }}"
+    AWS_REGION: "{{ aws_region | default(lookup('env', 'AWS_REGION') | default('us-west-2', true), true) }}"
+    AWS_DEFAULT_OUTPUT: "{{ aws_default_output | default(lookup('env', 'AWS_DEFAULT_OUTPUT') | default('json', true), true) }}"
+    HF_TOKEN: "{{ hf_token | default(lookup('env', 'HF_TOKEN'), true) }}"
+  tasks:
+    - name: Deploy Ray-backed vLLM lane
+      ansible.builtin.command: ./scripts/eks/install-kuberay.sh && ./scripts/eks/deploy-ray-vllm.sh && ./scripts/eks/expose-ray-metrics.sh && ./scripts/eks/validate-ray-vllm.sh && ./scripts/eks/validate-monitoring.sh && ./scripts/eks/report-ray-topology.sh
+      args:
+        chdir: "{{ repo_root }}"
+      when: lane == 'ray-vllm'
+
+    - name: Deploy Kubernetes vLLM lane
+      ansible.builtin.command: ./scripts/eks/deploy-vllm.sh && ./scripts/eks/validate-vllm.sh
+      args:
+        chdir: "{{ repo_root }}"
+      when: lane == 'k8s-vllm'
+
+    - name: Deploy Dynamo-backed vLLM lane
+      ansible.builtin.command: ./scripts/eks/deploy-dynamo-vllm.sh && ./scripts/eks/expose-dynamo-metrics.sh && ./scripts/eks/validate-dynamo-vllm.sh && ./scripts/eks/validate-monitoring.sh && ./scripts/eks/report-dynamo-topology.sh
+      args:
+        chdir: "{{ repo_root }}"
+      when: lane == 'dynamo-vllm'
+
+    - name: Fail for unsupported lane deploy target
+      ansible.builtin.fail:
+        msg: "Unsupported lane={{ lane }}. Supported lanes: ray-vllm, k8s-vllm, dynamo-vllm."
+      when: lane not in ['ray-vllm', 'k8s-vllm', 'dynamo-vllm']

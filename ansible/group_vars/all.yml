@@ -1,0 +1,19 @@
+repo_root: "{{ playbook_dir }}/../.."
+lane: ray-vllm
+task_suite: 0
+benchmark_rounds: 3
+benchmark_concurrency: 3
+run_preflight: true
+run_monitoring: true
+run_topology_report: true
+skip_validate: true
+skip_startup_latency: true
+experiment_timestamp: ""
+experiment_dir: ""
+prom_namespace: monitoring
+prom_service: kube-prometheus-stack-prometheus
+aws_profile: "{{ lookup('env', 'AWS_PROFILE') | default('', true) }}"
+aws_region: "{{ lookup('env', 'AWS_REGION') | default('us-west-2', true) }}"
+aws_default_output: "{{ lookup('env', 'AWS_DEFAULT_OUTPUT') | default('json', true) }}"
+hf_token: "{{ lookup('env', 'HF_TOKEN') | default('', true) }}"
+vllm_api_key: "{{ lookup('env', 'VLLM_API_KEY') | default('', true) }}"

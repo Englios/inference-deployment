@@ -1,0 +1,34 @@
+---
+- name: Apply infrastructure for experiment profile
+  hosts: localhost
+  gather_facts: false
+  environment:
+    AWS_PROFILE: "{{ aws_profile | default(lookup('env', 'AWS_PROFILE'), true) }}"
+    AWS_REGION: "{{ aws_region | default(lookup('env', 'AWS_REGION') | default('us-west-2', true), true) }}"
+    AWS_DEFAULT_OUTPUT: "{{ aws_default_output | default(lookup('env', 'AWS_DEFAULT_OUTPUT') | default('json', true), true) }}"
+    TFVARS_FILE: "{{ tfvars_file | default(lookup('env', 'TFVARS_FILE') | default(repo_root ~ '/terraform/stacks/eks-inference/terraform.tfvars', true), true) }}"
+  tasks:
+    - name: Plan infrastructure
+      ansible.builtin.command: ./scripts/eks/plan.sh
+      args:
+        chdir: "{{ repo_root }}"
+
+    - name: Apply infrastructure
+      ansible.builtin.command: ./scripts/eks/apply.sh
+      args:
+        chdir: "{{ repo_root }}"
+
+    - name: Refresh kubeconfig
+      ansible.builtin.command: ./scripts/eks/kubeconfig.sh
+      args:
+        chdir: "{{ repo_root }}"
+
+    - name: Reinstall accelerator plugin on current GPU nodes
+      ansible.builtin.command: ./scripts/eks/install-accelerator-plugin.sh
+      args:
+        chdir: "{{ repo_root }}"
+
+    - name: Validate cluster after infra apply
+      ansible.builtin.command: ./scripts/eks/validate.sh
+      args:
+        chdir: "{{ repo_root }}"

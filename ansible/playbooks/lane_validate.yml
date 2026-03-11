@@ -1,0 +1,19 @@
+---
+- name: Validate experiment lane
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Validate lane
+      ansible.builtin.command: ./scripts/eks/validate-lane.sh
+      args:
+        chdir: "{{ repo_root }}"
+      environment:
+        LANE: "{{ lane }}"
+
+    - name: Report lane topology
+      ansible.builtin.command: ./scripts/eks/report-lane-topology.sh
+      args:
+        chdir: "{{ repo_root }}"
+      environment:
+        LANE: "{{ lane }}"
+      when: run_topology_report | default(true) | bool

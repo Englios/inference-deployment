@@ -1,0 +1,19 @@
+---
+- name: Run context sweep experiment via Ansible
+  hosts: localhost
+  gather_facts: false
+  environment:
+    AWS_PROFILE: "{{ aws_profile | default(lookup('env', 'AWS_PROFILE'), true) }}"
+    AWS_REGION: "{{ aws_region | default(lookup('env', 'AWS_REGION') | default('us-west-2', true), true) }}"
+    AWS_DEFAULT_OUTPUT: "{{ aws_default_output | default(lookup('env', 'AWS_DEFAULT_OUTPUT') | default('json', true), true) }}"
+    HF_TOKEN: "{{ hf_token | default(lookup('env', 'HF_TOKEN'), true) }}"
+    VLLM_API_KEY: "{{ vllm_api_key | default(lookup('env', 'VLLM_API_KEY') | default('', true), true) }}"
+  tasks:
+    - name: Execute Ray context sweep
+      ansible.builtin.command: ./scripts/eks/context-sweep.sh
+      args:
+        chdir: "{{ repo_root }}"
+      environment:
+        CONTEXT_WINDOWS: "{{ context_windows | default('32768 65536 131072') }}"
+        PROMPT: "{{ prompt | default('Explain the tradeoff between long context windows and TTFT in vLLM.') }}"
+        MAX_TOKENS: "{{ max_tokens | default(256) | string }}"
