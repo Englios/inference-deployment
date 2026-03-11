@@ -7,7 +7,7 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/lane.sh"
 
 require_supported_lane
 require_cmd kubectl
-require_cmd python3.11
+require_cmd python3
 
 ensure_experiment_dir >/dev/null
 
@@ -63,7 +63,7 @@ PROM_ARGS=(
 )
 
 echo "==> Capturing GPU metrics"
-python3.11 "${ROOT_DIR}/scripts/eks/prometheus_window_export.py" \
+python3 "${ROOT_DIR}/scripts/eks/prometheus_window_export.py" \
   "${PROM_ARGS[@]}" \
   --query "gpu_util_pct=avg(DCGM_FI_DEV_GPU_UTIL)" \
   --query "gpu_util_pct_by_node=avg by (Hostname) (DCGM_FI_DEV_GPU_UTIL)" \
@@ -76,7 +76,7 @@ python3.11 "${ROOT_DIR}/scripts/eks/prometheus_window_export.py" \
   > "${GPU_PATH}"
 
 echo "==> Capturing token/request metrics"
-python3.11 "${ROOT_DIR}/scripts/eks/prometheus_window_export.py" \
+python3 "${ROOT_DIR}/scripts/eks/prometheus_window_export.py" \
   "${PROM_ARGS[@]}" \
   --query "ray_ongoing_requests=sum(ray_serve_num_ongoing_http_requests)" \
   --query "ray_queue_len=sum(ray_serve_request_router_queue_len)" \
@@ -85,7 +85,7 @@ python3.11 "${ROOT_DIR}/scripts/eks/prometheus_window_export.py" \
   > "${TOKEN_PATH}"
 
 echo "==> Capturing network metrics"
-python3.11 "${ROOT_DIR}/scripts/eks/prometheus_window_export.py" \
+python3 "${ROOT_DIR}/scripts/eks/prometheus_window_export.py" \
   "${PROM_ARGS[@]}" \
   --query "pod_rx_bps=sum(rate(container_network_receive_bytes_total{namespace=\"${NAMESPACE}\"}[2m]))" \
   --query "pod_tx_bps=sum(rate(container_network_transmit_bytes_total{namespace=\"${NAMESPACE}\"}[2m]))" \

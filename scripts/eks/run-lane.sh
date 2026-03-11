@@ -27,6 +27,6 @@ run_step "Benchmark lane" "${ROOT_DIR}/scripts/eks/benchmark-lane.sh"
 run_step "Capture Prometheus metrics" "${ROOT_DIR}/scripts/eks/capture-prometheus-metrics.sh"
 run_step "Capture topology" "${ROOT_DIR}/scripts/eks/report-lane-topology.sh"
 run_step "Capture observed metrics" "${ROOT_DIR}/scripts/eks/capture-observed-metrics.sh"
-run_step "Render experiment graphs" python3.11 "${ROOT_DIR}/scripts/eks/render-experiment-graphs.py"
+run_step "Render experiment graphs" python3 "${ROOT_DIR}/scripts/eks/render-experiment-graphs.py"
 
 echo "Experiment artifacts captured at: ${EXPERIMENT_DIR}"

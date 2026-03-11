@@ -20,7 +20,7 @@ RESULTS_DIR="${EXPERIMENT_RESULTS_DIR:-${ARTIFACT_DIR}/results}"
 mkdir -p "${ARTIFACT_DIR}"
 mkdir -p "${RESULTS_DIR}"
 
-benchmark_start_ts="$(python3.11 -c 'import time; print(f"{time.time():.3f}")')"
+benchmark_start_ts="$(python3 -c 'import time; print(f"{time.time():.3f}")')"
 
 worker_nodes="$(kubectl -n "${NAMESPACE}" get pod -l nvidia.com/dynamo-component-type=worker -o jsonpath='{range .items[*]}{.spec.nodeName}{"\n"}{end}' | sort -u | sed '/^$/d' | wc -l | tr -d ' ')"
 worker_gpus="$(kubectl -n "${NAMESPACE}" get pod -l nvidia.com/dynamo-component-type=worker -o jsonpath='{range .items[*]}{.spec.containers[0].resources.limits.gpu}{"\n"}{end}' | awk '{sum+=$1} END {print sum+0}')"
@@ -51,16 +51,16 @@ if [[ "${TASK_SUITE}" == "1" ]]; then
   benchmark_args+=(--task-suite)
 fi
 
-python3.11 "${ROOT_DIR}/scripts/eks/benchmark_vllm.py" "${benchmark_args[@]}" | tee "${RESULTS_DIR}/benchmark-dynamo-vllm.json"
+python3 "${ROOT_DIR}/scripts/eks/benchmark_vllm.py" "${benchmark_args[@]}" | tee "${RESULTS_DIR}/benchmark-dynamo-vllm.json"
 
-benchmark_end_ts="$(python3.11 -c 'import time; print(f"{time.time():.3f}")')"
+benchmark_end_ts="$(python3 -c 'import time; print(f"{time.time():.3f}")')"
 
 cat > "${RESULTS_DIR}/benchmark-window.json" <<EOF
 {
   "lane": "dynamo-vllm",
   "start_time_unix": ${benchmark_start_ts},
   "end_time_unix": ${benchmark_end_ts},
-  "duration_seconds": $(python3.11 -c 'import sys; print(float(sys.argv[2]) - float(sys.argv[1]))' "${benchmark_start_ts}" "${benchmark_end_ts}")
+  "duration_seconds": $(python3 -c 'import sys; print(float(sys.argv[2]) - float(sys.argv[1]))' "${benchmark_start_ts}" "${benchmark_end_ts}")
 }
 EOF
 

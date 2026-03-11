@@ -4,7 +4,7 @@ source "$(dirname -- "${BASH_SOURCE[0]}")/lane.sh"
 
 require_supported_lane
 require_cmd kubectl
-require_cmd python3.11
+require_cmd python3
 
 ensure_experiment_dir >/dev/null
 
@@ -43,7 +43,7 @@ if [[ "${ready}" != "true" ]]; then
   exit 0
 fi
 
-python3.11 "${ROOT_DIR}/scripts/eks/prometheus_window_export.py" \
+python3 "${ROOT_DIR}/scripts/eks/prometheus_window_export.py" \
   --base-url "http://127.0.0.1:${PROM_LOCAL_PORT}" \
   --window-file "${WINDOW_FILE}" \
   --default-range-seconds 300 \

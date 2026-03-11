@@ -69,6 +69,38 @@ def discover_model(base_url: str, api_key: str) -> str:
     return payload["data"][0]["id"]
 
 
+def _fetch_prometheus_metrics(metrics_url: str) -> dict[str, float]:
+    """Fetch vLLM metrics from Prometheus API."""
+    metrics = {
+        "gpu_cache_usage_perc": 0.0,
+        "cpu_cache_usage_perc": 0.0,
+        "num_requests_running": 0.0,
+        "num_requests_waiting": 0.0,
+    }
+
+    metric_names = [
+        "vllm:gpu_cache_usage_perc",
+        "vllm:cpu_cache_usage_perc",
+        "vllm:num_requests_running",
+        "vllm:num_requests_waiting",
+    ]
+
+    for metric in metric_names:
+        try:
+            query_url = f"{metrics_url}/api/v1/query?query={metric}"
+            request = urllib.request.Request(query_url)
+            with urllib.request.urlopen(request, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                if data.get("data", {}).get("result"):
+                    value = float(data["data"]["result"][0]["value"][1])
+                    key = metric.replace("vllm:", "")
+                    metrics[key] = value
+        except Exception as e:
+            import sys
+            print(f"Warning: Failed to fetch {metric}: {e}", file=sys.stderr)
+
+    return metrics
+
 def estimate_token_count(text: str) -> int:
     stripped = text.strip()
     if not stripped:
@@ -298,6 +330,44 @@ def benchmark(
         "requests_running": empty_metric_summary(),
         "requests_waiting": empty_metric_summary(),
     }
+
+    # Fetch Prometheus metrics if available
+    try:
+        prometheus_metrics = _fetch_prometheus_metrics(metrics_url)
+        if prometheus_metrics.get("gpu_cache_usage_perc") or prometheus_metrics.get("cpu_cache_usage_perc"):
+            kv_cache_metrics["gpu_cache_usage_percent"] = {
+                "latest": prometheus_metrics.get("gpu_cache_usage_perc"),
+                "max": prometheus_metrics.get("gpu_cache_usage_perc"),
+                "avg": prometheus_metrics.get("gpu_cache_usage_perc"),
+            }
+            kv_cache_metrics["cpu_cache_usage_percent"] = {
+                "latest": prometheus_metrics.get("cpu_cache_usage_perc"),
+                "max": prometheus_metrics.get("cpu_cache_usage_perc"),
+                "avg": prometheus_metrics.get("cpu_cache_usage_perc"),
+            }
+            # Calculate combined KV cache usage
+            gpu_usage = prometheus_metrics.get("gpu_cache_usage_perc", 0.0)
+            cpu_usage = prometheus_metrics.get("cpu_cache_usage_perc", 0.0)
+            combined_usage = max(gpu_usage, cpu_usage)  # Use max as primary indicator
+            kv_cache_metrics["kv_cache_usage_percent"] = {
+                "latest": combined_usage,
+                "max": combined_usage,
+                "avg": combined_usage,
+            }
+        if prometheus_metrics.get("num_requests_running") is not None or prometheus_metrics.get("num_requests_waiting") is not None:
+            queue_pressure_metrics["requests_running"] = {
+                "latest": prometheus_metrics.get("num_requests_running"),
+                "max": prometheus_metrics.get("num_requests_running"),
+                "avg": prometheus_metrics.get("num_requests_running"),
+            }
+            queue_pressure_metrics["requests_waiting"] = {
+                "latest": prometheus_metrics.get("num_requests_waiting"),
+                "max": prometheus_metrics.get("num_requests_waiting"),
+                "avg": prometheus_metrics.get("num_requests_waiting"),
+            }
+    except Exception:
+        # Silently fallback to empty metrics if fetch fails
+        pass
 
     result = {
         "model": model,

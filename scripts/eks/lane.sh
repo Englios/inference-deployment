@@ -127,15 +127,15 @@ print(json.dumps(items))
   "engine": "${engine_name}",
   "model_source": "${model_source}",
   "served_model_name": "${model_served}",
-  "tensor_parallel_size": ${tp},
-  "pipeline_parallel_size": ${pp},
-  "data_parallel_size": ${dp},
-  "max_model_len": ${max_model_len},
-  "gpu_memory_utilization": ${gpu_mem},
-  "network_peak_bandwidth_gbps": ${network_peak_bandwidth_gbps},
+  "tensor_parallel_size": ${tp:-0},
+  "pipeline_parallel_size": ${pp:-0},
+  "data_parallel_size": ${dp:-0},
+  "max_model_len": ${max_model_len:-0},
+  "gpu_memory_utilization": ${gpu_mem:-0.0},
+  "network_peak_bandwidth_gbps": ${network_peak_bandwidth_gbps:-0},
   "aws_profile": "${aws_profile}",
   "aws_region": "${aws_region}",
-  "cluster_nodes": ${cluster_nodes_json}
+  "cluster_nodes": ${cluster_nodes_json:-[]}
 }
 EOF
 
@@ -195,11 +195,11 @@ record_scenario_metadata() {
   "model_source": "${model_source}",
   "served_model_name": "${model_served}",
   "parallelism": {
-    "tensor_parallel_size": ${tp},
-    "pipeline_parallel_size": ${pp},
-    "data_parallel_size": ${dp}
+    "tensor_parallel_size": ${tp:-0},
+    "pipeline_parallel_size": ${pp:-0},
+    "data_parallel_size": ${dp:-0}
   },
-  "max_model_len": ${max_model_len},
+  "max_model_len": ${max_model_len:-0},
   "aws": {
     "profile": "${AWS_PROFILE:-}",
     "region": "${AWS_REGION:-}"

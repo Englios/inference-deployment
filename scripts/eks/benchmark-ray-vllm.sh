@@ -20,7 +20,7 @@ RESULTS_DIR="${EXPERIMENT_RESULTS_DIR:-${ARTIFACT_DIR}/results}"
 mkdir -p "${ARTIFACT_DIR}"
 mkdir -p "${RESULTS_DIR}"
 
-benchmark_start_ts="$(python3.11 -c 'import time; print(f"{time.time():.3f}")')"
+benchmark_start_ts="$(python3 -c 'import time; print(f"{time.time():.3f}")')"
 
 kubectl -n "${NAMESPACE}" wait --for=condition=Ready pod -l ray.io/node-type=head --timeout=1800s
 worker_nodes="$(kubectl -n "${NAMESPACE}" get pod -l ray.io/group=gpu-workers -o jsonpath='{range .items[*]}{.spec.nodeName}{"\n"}{end}' | sort -u | sed '/^$/d' | wc -l | tr -d ' ')"
@@ -52,17 +52,17 @@ if [[ "${TASK_SUITE}" == "1" ]]; then
   benchmark_args+=(--task-suite)
 fi
 
-python3.11 "${ROOT_DIR}/scripts/eks/benchmark_vllm.py" \
+python3 "${ROOT_DIR}/scripts/eks/benchmark_vllm.py" \
   "${benchmark_args[@]}" | tee "${RESULTS_DIR}/benchmark-ray-vllm.json"
 
-benchmark_end_ts="$(python3.11 -c 'import time; print(f"{time.time():.3f}")')"
+benchmark_end_ts="$(python3 -c 'import time; print(f"{time.time():.3f}")')"
 
 cat > "${RESULTS_DIR}/benchmark-window.json" <<EOF
 {
   "lane": "ray-vllm",
   "start_time_unix": ${benchmark_start_ts},
   "end_time_unix": ${benchmark_end_ts},
-  "duration_seconds": $(python3.11 -c 'import sys; print(float(sys.argv[2]) - float(sys.argv[1]))' "${benchmark_start_ts}" "${benchmark_end_ts}")
+  "duration_seconds": $(python3 -c 'import sys; print(float(sys.argv[2]) - float(sys.argv[1]))' "${benchmark_start_ts}" "${benchmark_end_ts}")
 }
 EOF
 
