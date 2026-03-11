@@ -68,6 +68,8 @@ spec:
               name: gcs
             - containerPort: ${ray_dashboard_port}
               name: dashboard
+            - containerPort: 8080
+              name: metrics
             - containerPort: ${ray_client_port}
               name: client
             resources:

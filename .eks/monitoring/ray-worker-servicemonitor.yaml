@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ray-worker-metrics
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    matchNames:
+    - inference-engine
+  selector:
+    matchLabels:
+      ray.io/node-type: worker
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
