@@ -55,6 +55,8 @@ def flatten(config: dict) -> dict[str, str]:
         "ray_dashboard_port": str(ray["dashboard_port"]),
         "ray_gcs_port": str(ray["gcs_port"]),
         "ray_client_port": str(ray["client_port"]),
+        "ray_serve_min_replicas": str(ray["serve_min_replicas"]),
+        "ray_serve_max_replicas": str(ray["serve_max_replicas"]),
         "ray_head_gpus": str(ray["head"]["gpus"]),
         "ray_head_cpu_request": str(ray["head"]["cpu_request"]),
         "ray_head_cpu_limit": str(ray["head"]["cpu_limit"]),

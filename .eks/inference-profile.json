@@ -34,6 +34,9 @@
     "dashboard_port": 8265,
     "gcs_port": 6379,
     "client_port": 10001,
+    "client_port": 10001,
+    "serve_min_replicas": 1,
+    "serve_max_replicas": 4,
     "head": {
       "gpus": 1,
       "cpu_request": "8",

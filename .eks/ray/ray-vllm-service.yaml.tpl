@@ -22,8 +22,8 @@ spec:
             gpu_memory_utilization: ${gpu_memory_utilization}
           deployment_config:
             autoscaling_config:
-              min_replicas: 1
-              max_replicas: 1
+              min_replicas: ${ray_serve_min_replicas}
+              max_replicas: ${ray_serve_max_replicas}
               target_ongoing_requests: ${ray_target_ongoing_requests}
             max_ongoing_requests: ${ray_max_ongoing_requests}
             health_check_period_s: ${ray_health_check_period_s}
