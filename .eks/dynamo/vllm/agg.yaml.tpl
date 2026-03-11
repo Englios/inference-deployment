@@ -1,3 +1,14 @@
+# NIXL Integration Point:
+#   For disaggregated prefill/decode setups, add --kv-transfer-config to worker args.
+#   Example (Prefill): --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_producer"}'
+#   Example (Decode): --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_consumer"}'
+#   See disagg.yaml.tpl for full disaggregated template scaffold.
+#
+# KV-Routing Integration Point:
+#   Dynamo supports KV-aware routing in Frontend to route prefill vs decode requests.
+#   This is configured via DynamoGraphDeployment spec.routing (not yet wired in this template).
+#   When enabled, Frontend routes based on request type to appropriate worker pools.
+#
 apiVersion: nvidia.com/v1alpha1
 kind: DynamoGraphDeployment
 metadata:

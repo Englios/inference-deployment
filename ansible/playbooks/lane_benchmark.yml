@@ -9,4 +9,5 @@
         chdir: "{{ repo_root }}"
       environment:
         LANE: "{{ lane }}"
+        EXPERIMENT_DIR: "{{ experiment_dir | default('') }}"
         TASK_SUITE: "{{ task_suite | default(0) | string }}"

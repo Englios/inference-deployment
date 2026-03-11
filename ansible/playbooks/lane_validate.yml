@@ -9,6 +9,7 @@
         chdir: "{{ repo_root }}"
       environment:
         LANE: "{{ lane }}"
+        EXPERIMENT_DIR: "{{ experiment_dir | default('') }}"
 
     - name: Report lane topology
       ansible.builtin.command: ./scripts/eks/report-lane-topology.sh
@@ -16,4 +17,5 @@
         chdir: "{{ repo_root }}"
       environment:
         LANE: "{{ lane }}"
+        EXPERIMENT_DIR: "{{ experiment_dir | default('') }}"
       when: run_topology_report | default(true) | bool

@@ -84,3 +84,6 @@
         SKIP_STARTUP_LATENCY: "{{ skip_startup_latency | default(true) | ternary('true','false') }}"
         BENCHMARK_ROUNDS: "{{ benchmark_rounds | default(2) | string }}"
         BENCHMARK_CONCURRENCY: "{{ benchmark_concurrency | default(2) | string }}"
+      loop: "{{ range(1, (run_count | default(1) | int) + 1) | list }}"
+      loop_control:
+        loop_var: run_iteration
