@@ -1,0 +1,179 @@
+# UNSTABLE: KVBM (KV Block Manager) integration — do NOT enable
+# Blocked by upstream crash bug: https://github.com/ai-dynamo/dynamo/issues/5857
+# Enable when #5857 is fixed
+apiVersion: nvidia.com/v1alpha1
+kind: DynamoGraphDeployment
+metadata:
+  name: ${dynamo_graph_name}
+  namespace: ${namespace}
+  labels:
+    app.kubernetes.io/name: dynamo-vllm-disagg
+    app.kubernetes.io/part-of: inference-engine
+    inference.engine: ${engine_framework}
+    inference.lane: dynamo-vllm-disagg
+spec:
+  backendFramework: ${engine_framework}
+  pvcs:
+  - name: ${dynamo_model_cache_pvc}
+    create: false
+  envs:
+  - name: HF_HOME
+    value: /opt/models
+  services:
+    Frontend:
+      serviceName: frontend
+      componentType: frontend
+      replicas: ${dynamo_frontend_replicas}
+      labels:
+        app.kubernetes.io/name: dynamo-vllm-disagg
+        app.kubernetes.io/component: frontend
+        inference.lane: dynamo-vllm-disagg
+      envs:
+      - name: DYN_LOGGING_JSONL
+        value: "1"
+      - name: DYN_SYSTEM_PORT
+        value: "${metrics_port}"
+      volumeMounts:
+      - name: ${dynamo_model_cache_pvc}
+        mountPoint: /opt/models
+      extraPodSpec:
+        mainContainer:
+          image: ${dynamo_image}
+          workingDir: /workspace/examples/backends/vllm
+          ports:
+          - containerPort: ${http_port}
+            name: http
+          - containerPort: ${metrics_port}
+            name: metrics
+          readinessProbe:
+            httpGet:
+              path: /v1/models
+              port: ${http_port}
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: ${http_port}
+            periodSeconds: 20
+            timeoutSeconds: 5
+    PrefillWorker:
+      serviceName: prefill-worker
+      componentType: worker
+      replicas: ${dynamo_worker_replicas}
+      envFromSecret: hf-token-secret
+      labels:
+        app.kubernetes.io/name: dynamo-vllm-disagg
+        app.kubernetes.io/component: prefill-worker
+        inference.lane: dynamo-vllm-disagg
+      envs:
+      - name: DYN_LOGGING_JSONL
+        value: "1"
+      - name: DYN_SYSTEM_PORT
+        value: "${metrics_port}"
+      - name: MODEL_PATH
+        value: ${model_source}
+      - name: SERVED_MODEL_NAME
+        value: ${served_model_name}
+      sharedMemory:
+        size: ${dynamo_worker_shared_memory}
+      volumeMounts:
+      - name: ${dynamo_model_cache_pvc}
+        mountPoint: /opt/models
+      extraPodSpec:
+        nodeSelector:
+          accelerator: ${accelerator_label}
+          workload: ${workload_label}
+        mainContainer:
+          image: ${dynamo_image}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+          - /bin/sh
+          - -c
+          args:
+          - >-
+            python3 -m dynamo.vllm
+            --model $$MODEL_PATH
+            --served-model-name $$SERVED_MODEL_NAME
+            --tensor-parallel-size ${tensor_parallel_size}
+            --pipeline-parallel-size ${pipeline_parallel_size}
+            --data-parallel-size ${data_parallel_size}
+            --gpu-memory-utilization ${gpu_memory_utilization}
+            --max-model-len ${max_model_len}
+            --block-size ${block_size}
+            --max-num-seqs ${max_num_seqs}
+          # EXPERIMENTAL: KV-transfer config for disaggregated prefill/decode
+          # Uncomment when disagg mode is stable and NIXL is validated
+          # --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_producer"}'
+          ports:
+          - containerPort: ${metrics_port}
+            name: metrics
+          resources:
+            requests:
+              gpu: "${dynamo_worker_gpu_count}"
+              cpu: "${dynamo_worker_cpu_request}"
+              memory: ${dynamo_worker_memory_request}
+            limits:
+              gpu: "${dynamo_worker_gpu_count}"
+              cpu: "${dynamo_worker_cpu_limit}"
+              memory: ${dynamo_worker_memory_limit}
+    DecodeWorker:
+      serviceName: decode-worker
+      componentType: worker
+      replicas: ${dynamo_worker_replicas}
+      envFromSecret: hf-token-secret
+      labels:
+        app.kubernetes.io/name: dynamo-vllm-disagg
+        app.kubernetes.io/component: decode-worker
+        inference.lane: dynamo-vllm-disagg
+      envs:
+      - name: DYN_LOGGING_JSONL
+        value: "1"
+      - name: DYN_SYSTEM_PORT
+        value: "${metrics_port}"
+      - name: MODEL_PATH
+        value: ${model_source}
+      - name: SERVED_MODEL_NAME
+        value: ${served_model_name}
+      sharedMemory:
+        size: ${dynamo_worker_shared_memory}
+      volumeMounts:
+      - name: ${dynamo_model_cache_pvc}
+        mountPoint: /opt/models
+      extraPodSpec:
+        nodeSelector:
+          accelerator: ${accelerator_label}
+          workload: ${workload_label}
+        mainContainer:
+          image: ${dynamo_image}
+          workingDir: /workspace/examples/backends/vllm
+          command:
+          - /bin/sh
+          - -c
+          args:
+          - >-
+            python3 -m dynamo.vllm
+            --model $$MODEL_PATH
+            --served-model-name $$SERVED_MODEL_NAME
+            --tensor-parallel-size ${tensor_parallel_size}
+            --pipeline-parallel-size ${pipeline_parallel_size}
+            --data-parallel-size ${data_parallel_size}
+            --gpu-memory-utilization ${gpu_memory_utilization}
+            --max-model-len ${max_model_len}
+            --block-size ${block_size}
+            --max-num-seqs ${max_num_seqs}
+          # EXPERIMENTAL: KV-transfer config for disaggregated prefill/decode
+          # Uncomment when disagg mode is stable and NIXL is validated
+          # --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_consumer"}'
+          ports:
+          - containerPort: ${metrics_port}
+            name: metrics
+          resources:
+            requests:
+              gpu: "${dynamo_worker_gpu_count}"
+              cpu: "${dynamo_worker_cpu_request}"
+              memory: ${dynamo_worker_memory_request}
+            limits:
+              gpu: "${dynamo_worker_gpu_count}"
+              cpu: "${dynamo_worker_cpu_limit}"
+              memory: ${dynamo_worker_memory_limit}
