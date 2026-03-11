@@ -93,6 +93,7 @@ spec:
             --model $$MODEL_PATH
             --served-model-name $$SERVED_MODEL_NAME
             --tensor-parallel-size ${tensor_parallel_size}
+            --pipeline-parallel-size ${pipeline_parallel_size}
             --data-parallel-size ${data_parallel_size}
             --gpu-memory-utilization ${gpu_memory_utilization}
             --max-model-len ${max_model_len}

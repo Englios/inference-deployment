@@ -25,7 +25,7 @@ benchmark_start_ts="$(python3.11 -c 'import time; print(f"{time.time():.3f}")')"
 worker_nodes="$(kubectl -n "${NAMESPACE}" get pod -l nvidia.com/dynamo-component-type=worker -o jsonpath='{range .items[*]}{.spec.nodeName}{"\n"}{end}' | sort -u | sed '/^$/d' | wc -l | tr -d ' ')"
 worker_gpus="$(kubectl -n "${NAMESPACE}" get pod -l nvidia.com/dynamo-component-type=worker -o jsonpath='{range .items[*]}{.spec.containers[0].resources.limits.gpu}{"\n"}{end}' | awk '{sum+=$1} END {print sum+0}')"
 
-kubectl -n "${NAMESPACE}" port-forward svc/llm-service "${LOCAL_PORT}:80" "${METRICS_PORT}:8000" >/tmp/dynamo-vllm-benchmark-port-forward.log 2>&1 &
+kubectl -n "${NAMESPACE}" port-forward svc/llm-service "${LOCAL_PORT}:80" "${METRICS_PORT}:9090" >/tmp/dynamo-vllm-benchmark-port-forward.log 2>&1 &
 port_forward_pid=$!
 
 trap 'kill "${port_forward_pid}" >/dev/null 2>&1 || true' EXIT

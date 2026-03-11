@@ -7,10 +7,11 @@ require_cmd curl
 
 NAMESPACE="${NAMESPACE:-$(config_value namespace)}"
 LOCAL_PORT="${LOCAL_PORT:-18000}"
+METRICS_PORT="${METRICS_PORT:-18001}"
 DYNAMO_GRAPH_NAME="${DYNAMO_GRAPH_NAME:-$(config_value dynamo.graph_name)}"
 
 kubectl -n "${NAMESPACE}" wait --for=condition=Ready pod -l "nvidia.com/dynamo-graph-deployment-name=${DYNAMO_GRAPH_NAME}" --timeout=1800s
-kubectl -n "${NAMESPACE}" port-forward svc/llm-service "${LOCAL_PORT}:80" >/tmp/dynamo-vllm-port-forward.log 2>&1 &
+kubectl -n "${NAMESPACE}" port-forward svc/llm-service "${LOCAL_PORT}:80" "${METRICS_PORT}:9090" >/tmp/dynamo-vllm-port-forward.log 2>&1 &
 port_forward_pid=$!
 
 trap 'kill "${port_forward_pid}" >/dev/null 2>&1 || true' EXIT
