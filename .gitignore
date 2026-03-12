@@ -7,3 +7,6 @@ __pycache__/
 *.lock
 **/secrets*
 !**/secrets.example.yaml
+**/.terraform*/
+**/.terraform/
+**/*.lock.*
