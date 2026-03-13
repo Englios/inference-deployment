@@ -1,0 +1,107 @@
+---
+- name: Install Dynamo Platform pinned to Debian node
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    namespace: dynamo-system
+    release_version: "0.9.1"
+    target_node_hostname: debian
+    proxy_image_repository: quay.io/brancz/kube-rbac-proxy
+    proxy_image_tag: v0.15.0
+    temp_dir: /tmp/dynamo-platform-install
+    values_file: "{{ temp_dir }}/dynamo-debian-values.yaml"
+
+  tasks:
+    - name: Ensure temp directory exists
+      ansible.builtin.file:
+        path: "{{ temp_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Write Helm values for Debian node pinning and proxy override
+      ansible.builtin.template:
+        src: templates/dynamo-debian-values.yaml.j2
+        dest: "{{ values_file }}"
+        mode: "0644"
+
+    - name: Fetch Dynamo CRDs chart
+      ansible.builtin.command:
+        cmd: >-
+          helm fetch
+          https://helm.ngc.nvidia.com/nvidia/ai-dynamo/charts/dynamo-crds-{{ release_version }}.tgz
+          --destination {{ temp_dir }}
+      args:
+        creates: "{{ temp_dir }}/dynamo-crds-{{ release_version }}.tgz"
+
+    - name: Fetch Dynamo Platform chart
+      ansible.builtin.command:
+        cmd: >-
+          helm fetch
+          https://helm.ngc.nvidia.com/nvidia/ai-dynamo/charts/dynamo-platform-{{ release_version }}.tgz
+          --destination {{ temp_dir }}
+      args:
+        creates: "{{ temp_dir }}/dynamo-platform-{{ release_version }}.tgz"
+
+    - name: Install or upgrade Dynamo CRDs
+      ansible.builtin.command:
+        cmd: >-
+          helm upgrade --install dynamo-crds {{ temp_dir }}/dynamo-crds-{{ release_version }}.tgz
+          --namespace {{ namespace }}
+          --create-namespace
+          --wait
+          --timeout 10m
+      register: crds_install
+      changed_when: >-
+        'has been upgraded' in crds_install.stdout
+        or 'installed' in crds_install.stdout
+
+    - name: Install or upgrade Dynamo Platform
+      ansible.builtin.command:
+        cmd: >-
+          helm upgrade --install dynamo-platform {{ temp_dir }}/dynamo-platform-{{ release_version }}.tgz
+          --namespace {{ namespace }}
+          --create-namespace
+          -f {{ values_file }}
+          --wait
+          --timeout 20m
+      register: platform_install
+      changed_when: >-
+        'has been upgraded' in platform_install.stdout
+        or 'installed' in platform_install.stdout
+
+    - name: Get Dynamo pods JSON
+      ansible.builtin.command:
+        cmd: kubectl get pods -n {{ namespace }} -o json
+      register: pods_json
+      changed_when: false
+
+    - name: Get platform release status
+      ansible.builtin.command:
+        cmd: helm status dynamo-platform -n {{ namespace }}
+      register: platform_status
+      changed_when: false
+
+    - name: Assert platform release is deployed
+      ansible.builtin.assert:
+        that:
+          - "'STATUS: deployed' in platform_status.stdout"
+        fail_msg: "Dynamo platform release is not deployed."
+
+    - name: Build list of pods not on target node
+      ansible.builtin.set_fact:
+        pods_not_on_target: >-
+          {{
+            (pods_json.stdout | from_json).items
+            | rejectattr('status.phase', 'equalto', 'Succeeded')
+            | rejectattr('spec.nodeName', 'equalto', target_node_hostname)
+            | map(attribute='metadata.name')
+            | list
+          }}
+
+    - name: Assert all running Dynamo pods are on target node
+      ansible.builtin.assert:
+        that:
+          - pods_not_on_target | length == 0
+        fail_msg: "Some active pods are not on {{ target_node_hostname }}: {{ pods_not_on_target }}"
+        success_msg: "All active Dynamo pods are scheduled on {{ target_node_hostname }}."

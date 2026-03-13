@@ -38,6 +38,33 @@ See the [alif-homelab](https://github.com/Englios/alif-homelab) repo for the bas
 - Hybrid GPU inference playbook: `docs/hybrid_gpu_inference_playbook.md`
 - LLM inference research notes: `docs/LLM Inference on GPU_ Research Notes.md`
 
+## Ansible: Dynamo Platform Install (Debian node)
+
+Use the Ansible playbook at `ansible/dynamo-platform-install.yml` to install:
+
+- `dynamo-crds` (required before platform for recent versions)
+- `dynamo-platform`
+
+The playbook also:
+
+- Pins operator/etcd/nats workloads to a target node hostname (default: `debian`)
+- Overrides kube-rbac-proxy image to `quay.io/brancz/kube-rbac-proxy:v0.15.0`
+
+Run it with local kube context:
+
+```bash
+ansible-playbook ansible/dynamo-platform-install.yml
+```
+
+Override defaults if needed:
+
+```bash
+ansible-playbook ansible/dynamo-platform-install.yml \
+  -e release_version=0.9.1 \
+  -e target_node_hostname=debian \
+  -e namespace=dynamo-system
+```
+
 ## Using Qwen3.5-27B-GGUF (Q3_K_M)
 
 This repo will store models in `./hf_cache` so downloads stay inside the project.
@@ -74,5 +101,3 @@ HF_TOKEN=$HF_TOKEN python scripts/download_qwen.py
 Notes:
 - The script uses `allow_patterns=["Qwen3.5-27B-Q3_K_M.gguf"]` to fetch the Q3_K_M quantized artifact.
 - Ensure you have enough disk space in `./hf_cache` and that `HF_TOKEN` is set if the model requires authentication.
-
-
