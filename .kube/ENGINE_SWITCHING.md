@@ -28,13 +28,22 @@ It reads model settings from `inference-engine-config`:
 
 Run warmup before starting any engine:
 
-```bash
-kubectl apply -k .kube/base
-kubectl -n inference-engine delete job model-download --ignore-not-found
-kubectl -n inference-engine apply -f .kube/base/model-download.yaml
-kubectl -n inference-engine logs -f job/model-download
-kubectl -n inference-engine wait --for=condition=complete --timeout=30m job/model-download
-```
+1. Copy the example secrets file and fill in real values:
+
+   ```bash
+   cp .kube/base/secrets.example.yaml .kube/base/secrets.yaml
+   # Edit .kube/base/secrets.yaml and replace placeholder values as needed
+   ```
+
+2. Apply the base and run the warmup job:
+
+   ```bash
+   kubectl apply -k .kube/base
+   kubectl -n inference-engine delete job model-download --ignore-not-found
+   kubectl -n inference-engine apply -f .kube/base/model-download.yaml
+   kubectl -n inference-engine logs -f job/model-download
+   kubectl -n inference-engine wait --for=condition=complete --timeout=30m job/model-download
+   ```
 
 ## Node placement
 
