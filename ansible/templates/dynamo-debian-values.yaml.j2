@@ -1,0 +1,40 @@
+dynamo-operator:
+  controllerManager:
+    kubeRbacProxy:
+      image:
+        repository: {{ proxy_image_repository }}
+        tag: {{ proxy_image_tag }}
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                    - {{ target_node_hostname }}
+
+etcd:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                  - {{ target_node_hostname }}
+
+nats:
+  podTemplate:
+    merge:
+      spec:
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                    - key: kubernetes.io/hostname
+                      operator: In
+                      values:
+                        - {{ target_node_hostname }}
