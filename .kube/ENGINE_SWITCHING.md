@@ -2,19 +2,48 @@
 
 This repo supports three inference engines in namespace `inference-engine`:
 
-- `vllm` in `.kube/vllm`
-- `sglang` in `.kube/sglang`
-- `llama.cpp` in `.kube/llamacpp`
+- `vllm` in `.kube/vllm-vanilla`
+- `sglang` in `.kube/sglang-vanilla`
+- `llama.cpp` in `.kube/llamacpp-vanilla`
 - middleware/auth gateway in `.kube/middleware`
 
 Shared resources are in `.kube/base`:
 
 - namespace
-- shared model cache PVC
-- engine runtime/model config (`config.yaml`)
-- `vllm-secrets`
+- shared model cache PVC (`model-cache-pvc`)
+- shared engine-agnostic config (`config.yaml`)
+- `api-keys-secret`
 
-All three reuse the same PVC `vllm-model-cache`.
+All three reuse the same PVC `model-cache-pvc`.
+
+## Cache warmup job (shared base)
+
+Base now includes `.kube/base/model-download.yaml` as a one-shot model cache warmup job.
+It reads model settings from `inference-engine-config`:
+
+- `MODEL_DOWNLOAD_NAME`
+- `MODEL_DOWNLOAD_REVISION`
+- `HF_HOME`
+- `HF_HUB_ENABLE_HF_TRANSFER`
+
+Run warmup before starting any engine:
+
+1. Copy the example secrets file and fill in real values:
+
+   ```bash
+   cp .kube/base/secrets.example.yaml .kube/base/secrets.yaml
+   # Edit .kube/base/secrets.yaml and replace placeholder values as needed
+   ```
+
+2. Apply the base and run the warmup job:
+
+   ```bash
+   kubectl apply -k .kube/base
+   kubectl -n inference-engine delete job model-download --ignore-not-found
+   kubectl -n inference-engine apply -f .kube/base/model-download.yaml
+   kubectl -n inference-engine logs -f job/model-download
+   kubectl -n inference-engine wait --for=condition=complete --timeout=30m job/model-download
+   ```
 
 ## Node placement
 
@@ -81,7 +110,7 @@ kubectl -n inference-engine scale deploy/llamacpp-server --replicas=0 || true
 ### Start vLLM
 
 ```bash
-kubectl apply -k .kube/vllm
+kubectl apply -k .kube/vllm-vanilla
 kubectl -n inference-engine scale deploy/vllm-server --replicas=1
 kubectl -n inference-engine rollout status deploy/vllm-server
 ```
@@ -89,7 +118,7 @@ kubectl -n inference-engine rollout status deploy/vllm-server
 ### Start SGLang
 
 ```bash
-kubectl apply -k .kube/sglang
+kubectl apply -k .kube/sglang-vanilla
 kubectl -n inference-engine scale deploy/sglang-server --replicas=1
 kubectl -n inference-engine rollout status deploy/sglang-server
 ```
@@ -97,7 +126,7 @@ kubectl -n inference-engine rollout status deploy/sglang-server
 ### Start llama.cpp
 
 ```bash
-kubectl apply -k .kube/llamacpp
+kubectl apply -k .kube/llamacpp-vanilla
 kubectl -n inference-engine scale deploy/llamacpp-server --replicas=1
 kubectl -n inference-engine rollout status deploy/llamacpp-server
 ```
@@ -117,12 +146,16 @@ curl http://127.0.0.1:18000/health
 ## Notes
 
 - Keep `.kube/base/secrets.yaml` local-only and out of git.
-- Edit only `.kube/base/config.yaml` to change model and runtime knobs for all engines.
+- Keep `.kube/base/config.yaml` engine-agnostic for shared knobs only.
+- Use `MODEL_DOWNLOAD_NAME` as the shared model identifier for vLLM/SGLang and cache warmup.
+- Keep engine-specific runtime tuning values in each engine deployment manifest.
+- Use `MODEL_DOWNLOAD_*` keys to pre-warm the shared PVC cache mounted at `/home/.cache/huggingface`.
 - `vllm` uses startup/readiness/liveness probes; readiness checks `/v1/models` with API key so traffic starts only after model load.
 - `sglang` uses startup/readiness/liveness probes; readiness checks `/v1/models` with API key.
 - `llama.cpp` uses startup/readiness/liveness probes via `/health`.
-- `llama.cpp` manifest expects a GGUF file at `/models/llamacpp/model.gguf`.
-- For `sglang`/`vllm`, model artifacts are pulled into shared cache under `/models`.
+- `llama.cpp` resolves its GGUF model file from `MODEL_SNAPSHOT_PATH`/`MODEL_DOWNLOAD_FILE` in the shared cache (e.g. under `/home/.cache/huggingface`), rather than a fixed `/models` path.
+- For `sglang`/`vllm`, model artifacts are pulled into the shared Hugging Face cache mounted at `/home/.cache/huggingface`.
+- All engines use the `LLM_API_KEY` env var sourced from `api-keys-secret` in the cluster.
 
 Probe debug:
 
