@@ -149,12 +149,12 @@ curl http://127.0.0.1:18000/health
 - Keep `.kube/base/config.yaml` engine-agnostic for shared knobs only.
 - Use `MODEL_DOWNLOAD_NAME` as the shared model identifier for vLLM/SGLang and cache warmup.
 - Keep engine-specific runtime tuning values in each engine deployment manifest.
-- Use `MODEL_DOWNLOAD_*` keys to pre-warm the shared PVC cache.
+- Use `MODEL_DOWNLOAD_*` keys to pre-warm the shared PVC cache mounted at `/home/.cache/huggingface`.
 - `vllm` uses startup/readiness/liveness probes; readiness checks `/v1/models` with API key so traffic starts only after model load.
 - `sglang` uses startup/readiness/liveness probes; readiness checks `/v1/models` with API key.
 - `llama.cpp` uses startup/readiness/liveness probes via `/health`.
-- `llama.cpp` manifest expects a GGUF file at `/models/llamacpp/model.gguf`.
-- For `sglang`/`vllm`, model artifacts are pulled into shared cache under `/models`.
+- `llama.cpp` resolves its GGUF model file from `MODEL_SNAPSHOT_PATH`/`MODEL_DOWNLOAD_FILE` in the shared cache (e.g. under `/home/.cache/huggingface`), rather than a fixed `/models` path.
+- For `sglang`/`vllm`, model artifacts are pulled into the shared Hugging Face cache mounted at `/home/.cache/huggingface`.
 - All engines use the `LLM_API_KEY` env var sourced from `api-keys-secret` in the cluster.
 
 Probe debug:
