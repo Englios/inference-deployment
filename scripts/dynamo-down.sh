@@ -14,8 +14,9 @@ Usage:
   scripts/dynamo-down.sh
 
 Behavior:
-  - Deletes the worker pod directly. The operator will not recreate it
-    until dynamo-up.sh is run again (apply + bounce).
+  - Deletes the worker pod directly.
+  - The Dynamo operator or Kubernetes controller may recreate the pod
+    based on the owning resource's desired state (e.g., replicas).
   - Does NOT delete PVCs, secrets, configmaps, or any other resources.
   - Optionally waits for the pod to be fully gone.
 
