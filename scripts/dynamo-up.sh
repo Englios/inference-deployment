@@ -6,6 +6,7 @@ WORKER_NAME="${WORKER_NAME:-VllmDecodeWorker}"
 KUBE_DIR="${KUBE_DIR:-.kube/vllm-dynamo}"
 WAIT="${WAIT:-true}"
 TIMEOUT="${TIMEOUT:-600}"
+POD_SELECTOR="${POD_SELECTOR:-dynamo-component=${WORKER_NAME}}"
 
 usage() {
   cat <<'EOF'
@@ -25,6 +26,8 @@ Environment overrides:
   KUBE_DIR=.kube/vllm-dynamo
   WAIT=true          (set to false to skip waiting)
   TIMEOUT=600        (seconds to wait for Ready)
+  POD_SELECTOR=dynamo-component=\$WORKER_NAME
+                      (label selector for the worker pod)
 
 Examples:
   scripts/dynamo-up.sh
@@ -51,7 +54,7 @@ kubectl apply -k "$KUBE_DIR"
 
 echo "Bouncing worker pod to pick up changes ..."
 kubectl -n "$NAMESPACE" delete pod \
-  -l "dynamo-component=${WORKER_NAME}" \
+  -l "${POD_SELECTOR}" \
   --ignore-not-found
 
 echo "Operator is reconciling ..."
@@ -61,11 +64,11 @@ if [[ "$WAIT" == "true" ]]; then
   # Give the operator a moment to create the new pod before we wait on it
   sleep 5
   kubectl -n "$NAMESPACE" wait pod \
-    -l "dynamo-component=${WORKER_NAME}" \
+    -l "${POD_SELECTOR}" \
     --for=condition=Ready \
     --timeout="${TIMEOUT}s"
   echo "Worker is Ready."
 else
   echo "Skipping wait. Check status with:"
-  echo "  kubectl -n ${NAMESPACE} get pods -l dynamo-component=${WORKER_NAME}"
+  echo "  kubectl -n ${NAMESPACE} get pods -l ${POD_SELECTOR}"
 fi
