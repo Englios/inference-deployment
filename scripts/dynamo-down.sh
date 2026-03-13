@@ -53,10 +53,20 @@ kubectl -n "$NAMESPACE" delete pod \
 
 if [[ "$WAIT" == "true" ]]; then
   echo "Waiting up to ${TIMEOUT}s for worker pod to terminate ..."
-  kubectl -n "$NAMESPACE" wait pod \
+  if ! kubectl -n "$NAMESPACE" wait pod \
     -l "dynamo-component=${WORKER_NAME}" \
     --for=delete \
-    --timeout="${TIMEOUT}s" 2>/dev/null || true
+    --timeout="${TIMEOUT}s"; then
+    echo "kubectl wait did not confirm deletion (timeout or error). Checking pod status..." >&2
+  fi
+
+  if kubectl -n "$NAMESPACE" get pods \
+    -l "dynamo-component=${WORKER_NAME}" \
+    --no-headers 2>/dev/null | grep -q '.'; then
+    echo "Worker pod is still present after delete/wait. GPU may not be free." >&2
+    exit 1
+  fi
+
   echo "Worker is down. GPU is free."
 else
   echo "Skipping wait. Check status with:"
